@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../services/nexus_zapret.dart';
 import '../services/mtproto_proxy.dart';
-
-// ════════════════════════════════════════════
-// Единая система: Zapret (DPI-обход) + MTProto
-// ════════════════════════════════════════════
+import '../services/tg_ws_proxy.dart';
+import '../services/dpi_strategies.dart';
 
 class VpnScreen extends StatefulWidget {
   const VpnScreen({super.key});
@@ -14,44 +12,184 @@ class VpnScreen extends StatefulWidget {
   State<VpnScreen> createState() => _VpnScreenState();
 }
 
-class _VpnScreenState extends State<VpnScreen> with SingleTickerProviderStateMixin {
-  bool _isActive = false;
-
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  final _zapret = NexusZapret.instance;
-  final _proxy = NexusMtprotoProxy.instance;
-  Timer? _statsTimer;
+class _VpnScreenState extends State<VpnScreen> {
+  bool _vpnActive = false;
+  bool _proxyActive = false;
+  bool _tgWsActive = false;
+  bool _dpiActive = false;
+  String _vpnStatus = 'Готов к запуску';
+  int _tgConnections = 0;
+  int _tgBytes = 0;
+  Timer? _refreshTimer;
+  DpiStrategy _selectedStrategy = allDpiStrategies[1]; // ALT 1 по умолчанию
 
   @override
   void initState() {
     super.initState();
+    _vpnActive = NexusZapret.instance.isRunning;
+    _proxyActive = NexusMtprotoProxy.instance.isRunning;
+    _tgWsActive = NexusTgWsProxy.instance.isRunning;
 
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+    NexusTgWsProxy.instance.onStatusChanged = (_) {
+      if (mounted) setState(() {
+        _tgWsActive = NexusTgWsProxy.instance.isRunning;
+      });
+    };
+    DpiStrategyManager.instance.addListener(() {
+      if (mounted) setState(() {
+        _dpiActive = DpiStrategyManager.instance.enabled;
+      });
+    });
 
-    _statsTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted) setState(() {});
+    // Обновляем статистику каждые 2 секунды
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (mounted) setState(() {
+        _tgConnections = NexusTgWsProxy.instance.activeConnections;
+        _tgBytes = NexusTgWsProxy.instance.bytesTransferred;
+      });
     });
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _statsTimer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  void _toggleVpn() {
+    setState(() => _vpnStatus = 'Переключение...');
+    try {
+      if (_vpnActive) {
+        NexusZapret.instance.stop();
+        setState(() {
+          _vpnActive = false;
+          _vpnStatus = 'Остановлен';
+        });
+      } else {
+        NexusZapret.instance.start();
+        setState(() {
+          _vpnActive = NexusZapret.instance.isRunning;
+          _vpnStatus = _vpnActive ? 'Активен' : 'Ошибка запуска';
+        });
+      }
+    } catch (e) {
+      setState(() => _vpnStatus = 'Ошибка: $e');
+    }
+  }
+
+  Future<void> _toggleMtproto() async {
+    setState(() {});
+    try {
+      if (_proxyActive) {
+        await NexusMtprotoProxy.instance.stop();
+      } else {
+        await NexusMtprotoProxy.instance.start();
+      }
+      setState(() => _proxyActive = NexusMtprotoProxy.instance.isRunning);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red[700]),
+      );
+    }
+  }
+
+  Future<void> _toggleTgWs() async {
+    try {
+      if (_tgWsActive) {
+        await NexusTgWsProxy.instance.stop();
+      } else {
+        final ok = await NexusTgWsProxy.instance.start();
+        if (!ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(NexusTgWsProxy.instance.error), backgroundColor: Colors.red[700]),
+          );
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red[700]),
+      );
+    }
+  }
+
+  void _showStrategyPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF161B22)
+              : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('Стратегия обхода DPI',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Адаптировано из Zapret для Android. Выберите стратегию, которая лучше всего работает для вашего провайдера.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: allDpiStrategies.length,
+                itemBuilder: (_, i) {
+                  final s = allDpiStrategies[i];
+                  final selected = _selectedStrategy.id == s.id;
+                  return ListTile(
+                    leading: Radio<String>(
+                      value: s.id,
+                      groupValue: _selectedStrategy.id,
+                      activeColor: const Color(0xFF6C63FF),
+                      onChanged: (_) {
+                        setState(() => _selectedStrategy = s);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    title: Text(s.name, style: TextStyle(fontWeight: selected ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
+                    subtitle: Text(s.description, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                    onTap: () {
+                      setState(() => _selectedStrategy = s);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5);
+    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -60,445 +198,364 @@ class _VpnScreenState extends State<VpnScreen> with SingleTickerProviderStateMix
         backgroundColor: const Color(0xFF6C63FF),
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          if (_isActive)
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 14),
-                  SizedBox(width: 6),
-                  Text('Активно', style: TextStyle(color: Colors.green, fontSize: 12)),
-                ],
-              ),
-            ),
-        ],
       ),
-      body: SingleChildScrollView(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildMainCard(isDark),
-            const SizedBox(height: 24),
-            _buildZapretSection(isDark),
-            const SizedBox(height: 24),
-            const Divider(height: 1),
-            const SizedBox(height: 24),
-            _buildMtprotoSection(isDark),
-            const SizedBox(height: 16),
-            Center(
-              child: Text(
-                'Работает полностью автономно\nбез внешних серверов',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[500], fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ═══ Главная карточка ═══
-
-  Widget _buildMainCard(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: _isActive
-              ? [Colors.green.withOpacity(0.15), cardColor]
-              : [const Color(0xFF6C63FF).withOpacity(0.1), cardColor],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _isActive ? Colors.green.withOpacity(0.3) : const Color(0xFF6C63FF).withOpacity(0.2),
-        ),
-      ),
-      child: Column(
         children: [
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) => Transform.scale(
-              scale: _isActive ? _pulseAnimation.value : 1.0,
-              child: Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isActive ? Colors.green.withOpacity(0.15) : const Color(0xFF6C63FF).withOpacity(0.1),
-                  border: Border.all(
-                    color: _isActive ? Colors.green.withOpacity(0.4) : const Color(0xFF6C63FF).withOpacity(0.3),
-                    width: 2,
+          // Карточка статуса VPN
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: _vpnActive
+                    ? [const Color(0xFF6C63FF), const Color(0xFF4A42D5)]
+                    : [isDark ? const Color(0xFF21262D) : Colors.grey[300]!,
+                       isDark ? const Color(0xFF161B22) : Colors.grey[200]!],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 64, height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _vpnActive
+                        ? Colors.white.withOpacity(0.2)
+                        : Colors.black.withOpacity(0.1),
+                  ),
+                  child: Icon(
+                    _vpnActive ? Icons.shield : Icons.shield_outlined,
+                    size: 32,
+                    color: _vpnActive ? Colors.white : Colors.grey,
                   ),
                 ),
-                child: Icon(Icons.shield, size: 40,
-                    color: _isActive ? Colors.green : const Color(0xFF6C63FF)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text('VPN', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(
-            'Zapret (DPI-обход) + MTProto Proxy\nавтономно, без внешних серверов',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
-          ),
-          const SizedBox(height: 28),
-          SizedBox(
-            width: double.infinity, height: 54,
-            child: ElevatedButton.icon(
-              onPressed: _toggle,
-              icon: Icon(_isActive ? Icons.stop : Icons.play_arrow),
-              label: Text(
-                _isActive ? 'Остановить всё' : 'Запустить всё',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isActive ? Colors.red[400] : const Color(0xFF6C63FF),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ═══ Zapret ═══
-
-  Widget _buildZapretSection(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text('ПРОФИЛИ ОБХОДА DPI',
-              style: TextStyle(color: Color(0xFF6C63FF), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-            const Spacer(),
-            Text('${_zapret.enabledProfiles.length} / ${_zapret.profiles.length}',
-              style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ..._zapret.profiles.map((profile) => _buildProfileCard(profile, isDark, cardColor)),
-
-        const SizedBox(height: 16),
-
-        // DNS
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cardColor, borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _zapret.activeDns != null ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.dns,
-                  color: _zapret.activeDns != null ? Colors.green : Colors.orange, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('DNS-over-HTTPS', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text(_zapret.activeDns ?? 'DNS недоступен (системный)',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _zapret.activeDns != null ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _zapret.activeDns != null ? 'ОК' : 'WARN',
+                const SizedBox(height: 12),
+                Text(
+                  _vpnActive ? 'Защищено' : 'Не защищено',
                   style: TextStyle(
-                    color: _zapret.activeDns != null ? Colors.green : Colors.orange,
-                    fontSize: 11, fontWeight: FontWeight.bold),
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: _vpnActive ? Colors.white : (isDark ? Colors.white54 : Colors.black45),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  _vpnStatus,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _vpnActive ? Colors.white70 : (isDark ? Colors.grey : Colors.grey[600]),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: 60, height: 60,
+                  child: FloatingActionButton(
+                    onPressed: _toggleVpn,
+                    backgroundColor: _vpnActive
+                        ? Colors.red.withOpacity(0.8)
+                        : Colors.white,
+                    child: Icon(
+                      Icons.power_settings_new,
+                      color: _vpnActive ? Colors.white : Colors.black87,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
 
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
 
-        // Stats
-        ..._buildStats(isDark),
-      ],
-    );
-  }
-
-  Widget _buildProfileCard(ZapretProfile profile, bool isDark, Color cardColor) {
-    final enabled = _zapret.isProfileEnabled(profile.name);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: cardColor, borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: enabled ? Colors.green.withOpacity(0.3) : (isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: enabled ? Colors.green.withOpacity(0.15) : const Color(0xFF6C63FF).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(enabled ? Icons.check_circle : Icons.shield_outlined,
-                  color: enabled ? Colors.green : const Color(0xFF6C63FF), size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(profile.name,
-                    style: TextStyle(fontWeight: FontWeight.w600,
-                        color: enabled ? Colors.green : (isDark ? Colors.white : Colors.black87))),
-                  const SizedBox(height: 2),
-                  Text(profile.description,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                ],
+          // TG WS Proxy — WebSocket MTProto Proxy
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: _tgWsActive
+                  ? LinearGradient(
+                      colors: [const Color(0xFF0088CC), const Color(0xFF006699)],
+                    )
+                  : null,
+              color: _tgWsActive ? null : cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _tgWsActive
+                    ? const Color(0xFF0088CC)
+                    : (isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
               ),
             ),
-            Switch(
-              value: enabled,
-              activeColor: Colors.green,
-              onChanged: (v) {
-                setState(() {
-                  if (v) _zapret.enableProfile(profile.name);
-                  else _zapret.disableProfile(profile.name);
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildStats(bool isDark) {
-    final stats = _zapret.getStats();
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-    return [
-      Text('СТАТИСТИКА',
-        style: TextStyle(color: const Color(0xFF6C63FF), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-      const SizedBox(height: 8),
-      _statRow('Техника', '${stats['technique']}', Icons.speed, isDark, cardColor),
-      const SizedBox(height: 6),
-      _statRow('Обработано', '${stats['packetsProcessed']}', Icons.swap_horiz, isDark, cardColor),
-      const SizedBox(height: 6),
-      _statRow('Обойдено', '${stats['packetsBypassed']}', Icons.check_circle_outline, isDark, cardColor),
-    ];
-  }
-
-  Widget _statRow(String label, String value, IconData icon, bool isDark, Color cardColor) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor, borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF6C63FF), size: 18),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
-          const Spacer(),
-          Text(value, style: TextStyle(
-            color: isDark ? Colors.grey[300] : Colors.black87,
-            fontSize: 14, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  // ═══ MTProto ═══
-
-  Widget _buildMtprotoSection(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-    final running = _proxy.status == MtprotoProxyStatus.running;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('MTProto PROXY (локальный)',
-          style: TextStyle(color: Color(0xFF6C63FF), fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: cardColor, borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: running ? Colors.blue.withOpacity(0.3) : (isDark ? const Color(0xFF30363D) : Colors.grey[200]!)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      width: 36, height: 36,
                       decoration: BoxDecoration(
-                        color: running ? Colors.blue.withOpacity(0.15) : Colors.grey.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+                        color: (_tgWsActive ? Colors.white : const Color(0xFF0088CC)).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.telegram, color: running ? Colors.blue : Colors.grey, size: 24),
+                      child: Icon(Icons.web, color: _tgWsActive ? Colors.white : const Color(0xFF0088CC), size: 20),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('MTProto Proxy', style: TextStyle(fontWeight: FontWeight.w600)),
-                          Text(running ? '🟢 Работает' : '🔴 Остановлен',
-                            style: TextStyle(color: running ? Colors.green : Colors.grey[500], fontSize: 12)),
+                          Text('TG WS Proxy',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: _tgWsActive ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                              )),
+                          Text('WebSocket MTProto bridge',
+                              style: TextStyle(fontSize: 12, color: _tgWsActive ? Colors.white70 : Colors.grey)),
                         ],
                       ),
                     ),
                     Switch(
-                      value: running,
-                      activeColor: Colors.blue,
-                      onChanged: (v) async {
-                        if (v) await _proxy.start(); else await _proxy.stop();
-                        if (mounted) setState(() {});
-                      },
+                      value: _tgWsActive,
+                      onChanged: (_) => _toggleTgWs(),
+                      activeColor: Colors.white,
+                      activeTrackColor: Colors.white.withOpacity(0.3),
                     ),
                   ],
                 ),
-              ),
-              if (running) ...[
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                if (_tgWsActive) ...[
+                  const Divider(height: 20, color: Colors.white24),
+                  Row(
                     children: [
-                      Row(children: [
-                        Text('Порт: ', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                        Text('${_proxy.port}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ]),
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        Text('Подключений: ', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                        Text('${_proxy.connectionsOpened}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ]),
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        Text('Secret: ', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                        Text(_proxy.secret.length > 16 ? '${_proxy.secret.substring(0, 16)}...' : _proxy.secret,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ]),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0D1117) : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: SelectableText(_proxy.proxyLink,
-                          style: TextStyle(
-                            fontSize: 11, fontFamily: 'monospace',
-                            color: isDark ? Colors.grey[300] : Colors.black87,
+                      _statChip('Подключений', '$_tgConnections', _tgWsActive),
+                      const SizedBox(width: 12),
+                      _statChip('Трафик', _formatBytes(_tgBytes), _tgWsActive),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '127.0.0.1:${NexusTgWsProxy.instance.config.port}  секрет: ${NexusTgWsProxy.instance.config.secret}',
+                    style: TextStyle(fontSize: 11, color: _tgWsActive ? Colors.white54 : Colors.grey[500]),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // DPI Strategy — обход блокировок
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: _dpiActive
+                  ? const LinearGradient(
+                      colors: [Color(0xFFE65100), Color(0xFFBF360C)],
+                    )
+                  : null,
+              color: _dpiActive ? null : cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _dpiActive
+                    ? const Color(0xFFE65100)
+                    : (isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: (_dpiActive ? Colors.white : const Color(0xFFE65100)).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.shield, color: _dpiActive ? Colors.white : const Color(0xFFE65100), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Обход DPI',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: _dpiActive ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                              )),
+                          Text('YouTube, Discord и др.',
+                              style: TextStyle(fontSize: 12, color: _dpiActive ? Colors.white70 : Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _dpiActive,
+                      onChanged: (v) {
+                        if (v) {
+                          DpiStrategyManager.instance.setStrategy(_selectedStrategy);
+                          DpiStrategyManager.instance.enable();
+                        } else {
+                          DpiStrategyManager.instance.disable();
+                        }
+                      },
+                      activeColor: Colors.white,
+                      activeTrackColor: Colors.white.withOpacity(0.3),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Выбор стратегии
+                GestureDetector(
+                  onTap: _dpiActive ? null : _showStrategyPicker,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: (_dpiActive ? Colors.white : Colors.grey).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.tune, size: 16, color: _dpiActive ? Colors.white70 : Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedStrategy.name,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _dpiActive ? Colors.white : Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                _selectedStrategy.description,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: _dpiActive ? Colors.white54 : Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [
-                              Icon(Icons.info_outline, size: 16, color: Colors.blue[400]),
-                              const SizedBox(width: 6),
-                              Text('Как подключить Telegram:',
-                                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blue[400], fontSize: 13)),
-                            ]),
-                            const SizedBox(height: 8),
-                            _step('1', 'Открой Telegram → Настройки'),
-                            _step('2', 'Перейди в "Данные и память"'),
-                            _step('3', 'Нажми "Использовать прокси"'),
-                            _step('4', 'Вставь ссылку выше или заполни вручную'),
-                          ],
-                        ),
-                      ),
-                    ],
+                        Icon(Icons.chevron_right, size: 18, color: _dpiActive ? Colors.white54 : Colors.grey),
+                      ],
+                    ),
                   ),
                 ),
               ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _step(String num, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 20, height: 20,
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
             ),
-            child: Center(child: Text(num,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[400]))),
           ),
-          const SizedBox(width: 8),
-          Text(text, style: TextStyle(fontSize: 12, color: Colors.grey[300])),
+
+          const SizedBox(height: 12),
+
+          // MTProto Proxy (старый)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0088CC).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.send, color: Color(0xFF0088CC), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('MTProto Proxy (echo)', style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text('Локальный TCP echo', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _proxyActive,
+                      onChanged: (_) => _toggleMtproto(),
+                      activeColor: const Color(0xFF0088CC),
+                    ),
+                  ],
+                ),
+                if (_proxyActive)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, left: 48),
+                    child: Text(
+                      '127.0.0.1:1443  секрет: nexus_mtproto_secret_2026',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // VpnService
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.vpn_lock, color: Color(0xFF4CAF50), size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('VpnService', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text('Системный VPN (Android)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _toggle() async {
-    final shouldStart = !_isActive;
-    if (shouldStart) {
-      _zapret.start();
-      await _proxy.start();
-    } else {
-      _zapret.stop();
-      await _proxy.stop();
-    }
-    if (mounted) setState(() => _isActive = shouldStart);
+  Widget _statChip(String label, String value, bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: (active ? Colors.white : Colors.white24).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: active ? Colors.white70 : Colors.grey)),
+          const SizedBox(width: 4),
+          Text(value, style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: active ? Colors.white : Colors.grey,
+          )),
+        ],
+      ),
+    );
   }
 }

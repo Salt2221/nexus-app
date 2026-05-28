@@ -1,0 +1,19 @@
+{
+  "versionName": "1.0.1",
+  "proxyServers": [
+    "wss://tgbridge.iamka.ru/ws",
+    "wss://proxy1.nexus.app/ws"
+  ],
+  "bridgeUrls": [
+    "wss://tgbridge.iamka.ru/ws"
+  ],
+  "features": {
+    "telegram_proxy": true,
+    "mesh_network": false,
+    "vpn_service": true,
+    "cloud_chats": true,
+    "auto_update_config": true
+  },
+  "connectionTimeout": 5000,
+  "reconnectDelay": 5000
+}

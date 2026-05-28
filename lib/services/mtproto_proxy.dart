@@ -4,8 +4,6 @@
 // ════════════════════════════════════════════
 
 import 'dart:io';
-import 'dart:math';
-import 'dart:convert';
 import 'dart:async';
 
 enum MtprotoProxyStatus { stopped, running }
@@ -22,15 +20,15 @@ class NexusMtprotoProxy {
   final List<Socket> _clients = [];
 
   MtprotoProxyStatus get status => _status;
+  bool get isRunning => _status == MtprotoProxyStatus.running;
   int get port => _port;
   String get secret => _secret;
   int get connectionsOpened => _connectionsOpened;
   String get proxyLink => 'tg://proxy?server=127.0.0.1&port=$_port&secret=$_secret';
 
   void init() {
-    final rng = Random();
-    final bytes = List.generate(16, (_) => rng.nextInt(256));
-    _secret = base64Url.encode(bytes).replaceAll('=', '');
+    // Фиксированный секрет — всегда один и тот же
+    _secret = 'nexus_mtproto_secret_2026';
   }
 
   /// Запускает TCP-сервер на локальном порту

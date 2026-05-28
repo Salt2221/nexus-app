@@ -4,12 +4,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Background circle -->
+    <!-- Hexagon background -->
     <path
         android:fillColor="#6C63FF"
-        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
-    <!-- N letter inside shield shape -->
+        android:pathData="M54,12L90,33V75L54,96L18,75V33Z"/>
+    <!-- Inner glow -->
+    <path
+        android:fillColor="#7B73FF"
+        android:pathData="M54,18L84,36V72L54,90L24,72V36Z"/>
+    <!-- NEXUS eye/diamond symbol -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M34,68V40l18,22V40l18,22V68H62V56L50,68H34Z"/>
+        android:pathData="M54,38L42,58L54,72L66,58Z"/>
+    <!-- Central dot (path instead of circle) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,51h8v8h-8z"/>
 </vector>

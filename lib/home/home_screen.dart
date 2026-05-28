@@ -12,15 +12,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   bool _showSearch = false;
-  int _chatMode = 0; // 0 = Mesh, 1 = Telegram
-  bool _meshReady = false;
 
   @override
   void initState() {
     super.initState();
-    // Слушаем Mesh-сеть
     MeshNetworkManager.instance.addListener(_onMeshUpdate);
-    _meshReady = MeshNetworkManager.instance.peers.isNotEmpty;
   }
 
   @override
@@ -31,29 +27,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onMeshUpdate() {
-    if (mounted) {
-      setState(() {
-        _meshReady = MeshNetworkManager.instance.peers.isNotEmpty;
-      });
-    }
+    if (mounted) setState(() {});
   }
 
   List<MeshPeer> get _filteredPeers {
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return MeshNetworkManager.instance.peers;
     return MeshNetworkManager.instance.peers.where((p) =>
-      p.name.toLowerCase().contains(query)
-    ).toList();
+      p.name.toLowerCase().contains(query)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5);
-
-    if (_chatMode == 1) {
-      return const TelegramWebChat();
-    }
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -70,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 onChanged: (_) => setState(() {}),
               )
-            : const Text('Mesh', style: TextStyle(fontWeight: FontWeight.bold)),
+            : const Text('NEXUS', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF6C63FF),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -92,135 +79,121 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _chatMode = 0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _chatMode == 0 ? Colors.white.withOpacity(0.25) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.hub, size: 16, color: Colors.white),
-                            SizedBox(width: 6),
-                            Text('Mesh', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ),
+      ),
+      body: ListView(
+        children: [
+          // 🌐 Telegram WebView entry
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Card(
+              color: isDark ? const Color(0xFF161B22) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ListTile(
+                leading: Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0088CC),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _chatMode = 1),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _chatMode == 1 ? Colors.white.withOpacity(0.25) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.send, size: 16, color: Colors.white),
-                            SizedBox(width: 6),
-                            Text('Telegram', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  child: const Icon(Icons.send, color: Colors.white, size: 24),
+                ),
+                title: const Text('Telegram', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('Веб-версия через WebView', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                onTap: () {
+                  Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const TelegramWebChat()));
+                },
               ),
             ),
           ),
-        ),
-      ),
-      body: _filteredPeers.isEmpty
-          ? Center(
+
+          // 📡 Mesh устройства
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'УСТРОЙСТВА РЯДОМ',
+              style: TextStyle(
+                color: const Color(0xFF6C63FF), fontSize: 12,
+                fontWeight: FontWeight.bold, letterSpacing: 1.2,
+              ),
+            ),
+          ),
+
+          if (_filteredPeers.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 32),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.wifi_tethering, size: 72, color: Colors.grey[600]),
-                  const SizedBox(height: 16),
-                  Text('Устройства не найдены', style: TextStyle(color: Colors.grey[500], fontSize: 18)),
-                  const SizedBox(height: 8),
-                  Text('Убедитесь, что устройства\nрядом и Mesh включён',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                  const SizedBox(height: 24),
+                  Icon(Icons.wifi_tethering, size: 64, color: Colors.grey[600]),
+                  const SizedBox(height: 12),
+                  Text('Устройства не найдены',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+                  const SizedBox(height: 4),
+                  Text('Mesh-сеть сканирует устройства рядом',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: () {
                       MeshNetworkManager.instance.init();
                       setState(() {});
                     },
-                    icon: const Icon(Icons.search),
+                    icon: const Icon(Icons.search, size: 18),
                     label: const Text('Поиск устройств'),
                   ),
                 ],
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(8),
-              itemCount: _filteredPeers.length,
-              itemBuilder: (context, i) {
-                final peer = _filteredPeers[i];
-                return Card(
-                  color: isDark ? const Color(0xFF161B22) : Colors.white,
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  child: ListTile(
-                    leading: Stack(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: const Color(0xFF6C63FF),
-                          child: Text(peer.name[0], style: const TextStyle(color: Colors.white)),
-                        ),
-                        if (peer.isOnline)
-                          Positioned(
-                            bottom: 0, right: 0,
-                            child: Container(
-                              width: 12, height: 12,
-                              decoration: BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: isDark ? const Color(0xFF161B22) : Colors.white, width: 2),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    title: Text(peer.name, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                    subtitle: Text('Mesh-устройство', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('Online', style: TextStyle(color: Colors.green[400], fontSize: 11)),
-                    ),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Подключение к ${peer.name}...')),
-                      );
-                    },
+            ),
+
+          // Список устройств Mesh
+          ..._filteredPeers.map((peer) => Card(
+            color: isDark ? const Color(0xFF161B22) : Colors.white,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ListTile(
+              leading: Stack(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: const Color(0xFF6C63FF),
+                    child: Text(peer.name.isNotEmpty ? peer.name[0] : '?',
+                        style: const TextStyle(color: Colors.white)),
                   ),
+                  if (peer.isOnline)
+                    Positioned(
+                      bottom: 0, right: 0,
+                      child: Container(
+                        width: 12, height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: isDark ? const Color(0xFF161B22) : Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              title: Text(peer.name,
+                  style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+              subtitle: Text('Mesh-устройство',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('Online',
+                    style: TextStyle(color: Colors.green[400], fontSize: 11)),
+              ),
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Подключение к ${peer.name}...')),
                 );
               },
             ),
+          )),
+        ],
+      ),
     );
   }
 }

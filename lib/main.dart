@@ -4,11 +4,9 @@ import 'services/mtproto_proxy.dart';
 import 'services/transport_layer.dart';
 import 'services/mesh_network.dart';
 import 'services/customization_service.dart';
-import 'services/update_checker.dart' show UpdateChecker, UpdateInfo;
 import 'auth/login_screen.dart';
 import 'services/auth_service.dart';
 import 'home/home_screen.dart';
-import 'chat/chat_screen.dart';
 import 'vpn/vpn_screen.dart';
 import 'settings/settings_screen.dart';
 
@@ -22,12 +20,6 @@ void main() {
   NexusAuthService.instance.initialize();
 
   runApp(const NexusApp());
-}
-
-/// Проверка обновлений при первом запуске (вызывается из _NexusAppState)
-Future<bool> checkForUpdate() async {
-  final update = await UpdateChecker.instance.checkForUpdate();
-  return update != null;
 }
 
 class NexusApp extends StatefulWidget {
@@ -54,43 +46,6 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
     // Start background services
     NexusTransportManager.instance.init();
     MeshNetworkManager.instance.init();
-
-    // Check for updates after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final update = await UpdateChecker.instance.checkForUpdate();
-      if (update != null && context.mounted) {
-        _showUpdateDialog(context, update);
-      }
-    });
-  }
-
-  void _showUpdateDialog(BuildContext context, UpdateInfo update) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Доступно обновление'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Версия: ${update.versionName}'),
-            const SizedBox(height: 8),
-            const Text('Что нового:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(update.changelog, style: const TextStyle(fontSize: 13)),
-            if (update.downloadUrl.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text('Скачать: ${update.downloadUrl}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Позже')),
-          if (update.downloadUrl.isNotEmpty)
-            FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Обновить')),
-        ],
-      ),
-    );
   }
 
   @override
