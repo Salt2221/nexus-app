@@ -65,8 +65,8 @@ class NexusConfig {
   };
 }
 
-const currentVersionName = '1.0.0';
-const currentVersionCode = 1;
+const currentVersionName = '1.0.3';
+const currentVersionCode = 3;
 const _repoOwner = 'Salt2221';
 const _repoName = 'nexus-app';
 const _configPath = 'nexus_config.json';

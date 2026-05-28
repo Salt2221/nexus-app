@@ -1,5 +1,5 @@
 {
-  "versionName": "1.0.1",
+  "versionName": "1.0.3",
   "proxyServers": [
     "wss://tgbridge.iamka.ru/ws",
     "wss://proxy1.nexus.app/ws"

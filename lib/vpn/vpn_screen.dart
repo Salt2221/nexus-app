@@ -56,20 +56,25 @@ class _VpnScreenState extends State<VpnScreen> {
     super.dispose();
   }
 
-  void _toggleVpn() {
-    setState(() => _vpnStatus = 'Переключение...');
+  void _toggleVpn() async {
+    setState(() => _vpnStatus = 'Запрос разрешения...');
     try {
       if (_vpnActive) {
-        NexusZapret.instance.stop();
+        final stopped = await NexusZapret.instance.stopVpnService();
         setState(() {
-          _vpnActive = false;
-          _vpnStatus = 'Остановлен';
+          _vpnActive = !stopped;
+          _vpnStatus = stopped ? 'Остановлен' : 'Ошибка остановки';
         });
       } else {
-        NexusZapret.instance.start();
+        final started = await NexusZapret.instance.startVpnService();
         setState(() {
-          _vpnActive = NexusZapret.instance.isRunning;
-          _vpnStatus = _vpnActive ? 'Активен' : 'Ошибка запуска';
+          if (started) {
+            _vpnActive = true;
+            _vpnStatus = 'Активен';
+          } else {
+            _vpnActive = false;
+            _vpnStatus = 'Отклонено или ошибка. Нажмите ещё раз для запроса разрешения.';
+          }
         });
       }
     } catch (e) {
@@ -507,28 +512,90 @@ class _VpnScreenState extends State<VpnScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: cardColor,
+              gradient: _vpnActive
+                  ? const LinearGradient(colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)])
+                  : null,
+              color: _vpnActive ? null : cardColor,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+              border: Border.all(
+                color: _vpnActive
+                    ? const Color(0xFF4CAF50)
+                    : (isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+              ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.vpn_lock, color: Color(0xFF4CAF50), size: 20),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text('VpnService', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('Системный VPN (Android)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: (_vpnActive ? Colors.white : const Color(0xFF4CAF50)).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _vpnActive ? Icons.vpn_lock : Icons.vpn_lock_outlined,
+                        color: _vpnActive ? Colors.white : const Color(0xFF4CAF50),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'VpnService',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _vpnActive ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                            ),
+                          ),
+                          Text(
+                            _vpnStatus,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _vpnActive ? Colors.white70 : Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _toggleVpn,
+                      child: Container(
+                        width: 56, height: 28,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          color: _vpnActive
+                              ? Colors.white.withOpacity(0.3)
+                              : const Color(0xFF4CAF50).withOpacity(0.2),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            _vpnActive ? Icons.power_settings_new : Icons.play_arrow,
+                            size: 18,
+                            color: _vpnActive ? Colors.white : const Color(0xFF4CAF50),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
+                if (_vpnActive)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12, left: 0),
+                    child: Row(
+                      children: [
+                        _statChip('Пакетов', '2.4K', true),
+                        const SizedBox(width: 8),
+                        _statChip('Обойдено', '1.8K', true),
+                        const SizedBox(width: 8),
+                        _statChip('DNS', '1.1.1.1', true),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
