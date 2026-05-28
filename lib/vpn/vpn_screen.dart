@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 import '../services/nexus_zapret.dart';
+
+const _vpnChannel = MethodChannel('com.nexus.v2/vpn');
 
 class VpnScreen extends StatefulWidget {
   const VpnScreen({super.key});
@@ -12,6 +15,8 @@ class VpnScreen extends StatefulWidget {
 class _VpnScreenState extends State<VpnScreen> {
   final _zapret = NexusZapret.instance;
   Timer? _timer;
+  String? _mtproxySecret;
+  bool _mtproxyConnected = false;
 
   @override
   void initState() {
@@ -19,12 +24,24 @@ class _VpnScreenState extends State<VpnScreen> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+    _loadMtproxyStatus();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadMtproxyStatus() async {
+    try {
+      final status = await _vpnChannel.invokeMethod<Map>('getMtproxyStatus');
+      if (status != null && mounted) {
+        setState(() {
+          _mtproxySecret = status['secret'] as String?;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _toggleVpn() async {
@@ -38,11 +55,17 @@ class _VpnScreenState extends State<VpnScreen> {
 
   Future<void> _toggleMtproto(bool val) async {
     if (val) {
-      await _zapret.startMtproto();
+      final secret = await _zapret.startMtproto();
+      if (mounted) {
+        setState(() {
+          _mtproxyConnected = secret != null;
+          if (secret is String && secret.isNotEmpty) _mtproxySecret = secret;
+        });
+      }
     } else {
       await _zapret.stopMtproto();
+      if (mounted) setState(() => _mtproxyConnected = false);
     }
-    if (mounted) setState(() {});
   }
 
   @override
@@ -55,9 +78,9 @@ class _VpnScreenState extends State<VpnScreen> {
     final uptime = _zapret.uptimeSeconds;
     final mtproxy = _zapret.mtprotoProxyEnabled;
 
-    final hours = (uptime ~/ 3600).toString().padLeft(2, '0');
-    final minutes = ((uptime % 3600) ~/ 60).toString().padLeft(2, '0');
-    final seconds = (uptime % 60).toString().padLeft(2, '0');
+    final h = (uptime ~/ 3600).toString().padLeft(2, '0');
+    final m = ((uptime % 3600) ~/ 60).toString().padLeft(2, '0');
+    final s = (uptime % 60).toString().padLeft(2, '0');
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -71,9 +94,9 @@ class _VpnScreenState extends State<VpnScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Основной статус
+          // VPN Status
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: BorderRadius.circular(20),
@@ -90,29 +113,29 @@ class _VpnScreenState extends State<VpnScreen> {
                 Text(
                   vpnRunning ? 'Защищено' : 'Не защищено',
                   style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 22, fontWeight: FontWeight.bold,
                     color: vpnRunning ? const Color(0xFF6C63FF) : Colors.grey[500],
                   ),
                 ),
                 if (vpnRunning) ...[
-                  const SizedBox(height: 8),
-                  Text('$hours:$minutes:$seconds',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[400], fontFamily: 'monospace'),
-                  ),
+                  const SizedBox(height: 4),
+                  Text('$h:$m:$s', style: TextStyle(fontSize: 14, color: Colors.grey[400], fontFamily: 'monospace')),
                 ],
                 const SizedBox(height: 20),
                 GestureDetector(
                   onTap: _toggleVpn,
                   child: Container(
-                    width: 72, height: 72,
+                    width: 68, height: 68,
                     decoration: BoxDecoration(
                       color: vpnRunning ? const Color(0xFF6C63FF) : Colors.grey[600],
-                      borderRadius: BorderRadius.circular(36),
+                      borderRadius: BorderRadius.circular(34),
+                      boxShadow: vpnRunning ? [
+                        BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.3), blurRadius: 15, spreadRadius: 2)
+                      ] : [],
                     ),
                     child: Icon(
                       vpnRunning ? Icons.power_settings_new : Icons.play_arrow,
-                      color: Colors.white, size: 36,
+                      color: Colors.white, size: 32,
                     ),
                   ),
                 ),
@@ -121,15 +144,16 @@ class _VpnScreenState extends State<VpnScreen> {
           ),
           const SizedBox(height: 16),
 
-          // MTProto Proxy (встроенный)
+          // MTProto Proxy with Secret
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
@@ -139,10 +163,8 @@ class _VpnScreenState extends State<VpnScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Встроенный MTProto Proxy',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                          Text('Принимает MTProto и ретранслирует Telegram',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                          Text('MTProto Proxy', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                          Text('Встроенный прокси для Telegram', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                         ],
                       ),
                     ),
@@ -155,14 +177,67 @@ class _VpnScreenState extends State<VpnScreen> {
                 ),
                 if (mtproxy) ...[
                   const Divider(),
+                  const SizedBox(height: 8),
+                  // Secret display
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                        ),
+                        child: const Text('SECRET', style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      if (_mtproxySecret != null) {
+                        Clipboard.setData(ClipboardData(text: _mtproxySecret!));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secret скопирован'), duration: Duration(seconds: 2)));
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0D1117) : const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _mtproxySecret ?? 'Генерация...',
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 13,
+                                color: isDark ? Colors.green[300] : Colors.green[700],
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.copy, size: 18, color: const Color(0xFF6C63FF)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      Text('Прокси:', style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+                      Icon(Icons.info_outline, size: 14, color: Colors.grey[500]),
+                      const SizedBox(width: 6),
+                      Text('Нажмите чтобы скопировать secret', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text('Прокси:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                       const SizedBox(width: 8),
-                      Text('127.0.0.1:1443', style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600,
-                        fontFamily: 'monospace',
-                        color: isDark ? Colors.white : Colors.black87)),
+                      Text('127.0.0.1:1443', style: TextStyle(fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                     ],
                   ),
                 ],
@@ -171,12 +246,11 @@ class _VpnScreenState extends State<VpnScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Профили DPI
-          Text('Профили обхода DPI',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87)),
+          // DPI Profiles
+          Text('Профили обхода',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
           const SizedBox(height: 8),
-          ..._zapret.profiles.map((profile) => Container(
+          ..._zapret.profiles.map((p) => Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -186,54 +260,52 @@ class _VpnScreenState extends State<VpnScreen> {
             ),
             child: Row(
               children: [
-                Icon(
-                  profile.enabled ? Icons.check_circle : Icons.circle_outlined,
-                  color: profile.enabled ? const Color(0xFF6C63FF) : Colors.grey[500],
-                  size: 20,
-                ),
+                Icon(p.enabled ? Icons.check_circle : Icons.circle_outlined,
+                  color: p.enabled ? const Color(0xFF6C63FF) : Colors.grey[500], size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(profile.name,
-                        style: TextStyle(fontWeight: FontWeight.w500,
-                          color: isDark ? Colors.white : Colors.black87)),
-                      Text(profile.description,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      Text(p.name, style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : Colors.black87)),
+                      Text(p.description, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                     ],
                   ),
                 ),
                 Switch(
-                  value: profile.enabled,
-                  onChanged: vpnRunning ? (val) {
-                    setState(() => profile.enabled = val);
-                  } : null,
+                  value: p.enabled,
+                  onChanged: vpnRunning ? (val) => setState(() => p.enabled = val) : null,
                   activeColor: const Color(0xFF6C63FF),
                 ),
               ],
             ),
           )),
 
-          // Инфо
+          // Info
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1A1E2E) : const Color(0xFFF0EEFF),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, color: const Color(0xFF6C63FF), size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'VpnService перехватывает весь TCP-трафик и ретранслирует его. '
-                    'Встроенный MTProto proxy на 127.0.0.1:1443 принимает MTProto-соединения '
-                    'и напрямую подключается к Telegram DC, минуя DPI.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500], height: 1.4),
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: const Color(0xFF6C63FF), size: 20),
+                    const SizedBox(width: 8),
+                    Text('Как использовать', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '1. Включите VPN кнопкой выше\n'
+                  '2. Включите MTProto Proxy\n'
+                  '3. Скопируйте secret\n'
+                  '4. Добавьте прокси 127.0.0.1:1443 с этим secret в Telegram\n'
+                  '5. Telegram будет идти через DPI-обход',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[500], height: 1.5),
                 ),
               ],
             ),

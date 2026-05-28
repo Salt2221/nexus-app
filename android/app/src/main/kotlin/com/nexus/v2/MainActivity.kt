@@ -49,12 +49,22 @@ class MainActivity : FlutterActivity() {
                         putExtra("port", port)
                     }
                     startService(intent)
-                    result.success(true)
+                    // Return secret to Flutter
+                    val service = NexusVpnService()
+                    result.success(service.getMtproxySecret())
                 }
                 "stopMtproxy" -> {
                     val intent = Intent(this, NexusVpnService::class.java).apply { action = "STOP_MT_PROXY" }
                     startService(intent)
                     result.success(true)
+                }
+                "getMtproxyStatus" -> {
+                    // Simplified: return static status
+                    val map = mapOf(
+                        "secret" to NexusVpnService().getMtproxySecret(),
+                        "port" to 1443
+                    )
+                    result.success(map)
                 }
                 else -> result.notImplemented()
             }

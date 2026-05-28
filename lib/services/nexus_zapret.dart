@@ -1,6 +1,5 @@
 // ════════════════════════════════════════════
-// NEXUS Zapret — DPI-обход через VpnService
-// Реальный туннель с встроенным MTProto proxy
+// NEXUS Zapret — VPN + MTProto Proxy Manager
 // ════════════════════════════════════════════
 
 import 'dart:async';
@@ -12,7 +11,6 @@ class ZapretProfile {
   final String name;
   final String description;
   bool enabled;
-
   ZapretProfile({required this.name, required this.description, this.enabled = false});
 }
 
@@ -27,8 +25,6 @@ class NexusZapret {
   bool _mtprotoProxyEnabled = false;
 
   final List<ZapretProfile> _profiles = [];
-  void Function(VpnServiceStatus status)? onVpnStatusChanged;
-
   List<ZapretProfile> get profiles => _profiles;
   bool get isRunning => _running;
   bool get mtprotoProxyEnabled => _mtprotoProxyEnabled;
@@ -38,12 +34,14 @@ class NexusZapret {
   Timer? _timer;
   int get uptimeSeconds => _startTime;
 
+  void Function(VpnServiceStatus status)? onVpnStatusChanged;
+
   void init() {
     _profiles.addAll([
-      ZapretProfile(name: 'YouTube', description: 'DPI-обход YouTube'),
-      ZapretProfile(name: 'Telegram', description: 'MTProto proxy для Telegram'),
-      ZapretProfile(name: 'Twitter / X', description: 'Обход Twitter'),
-      ZapretProfile(name: 'Универсальный', description: 'Автоматический обход'),
+      ZapretProfile(name: 'YouTube', description: 'Обход блокировок YouTube'),
+      ZapretProfile(name: 'Telegram', description: 'MTProto proxy + обход Telegram'),
+      ZapretProfile(name: 'Twitter / X', description: 'Обход Twitter/X'),
+      ZapretProfile(name: 'Универсальный', description: 'Автоматический обход DPI'),
     ]);
   }
 
@@ -80,13 +78,14 @@ class NexusZapret {
     }
   }
 
-  Future<bool> startMtproto({int port = 1443}) async {
+  /// Start MTProto proxy, returns secret string
+  Future<dynamic> startMtproto({int port = 1443}) async {
     try {
-      await _vpnChannel.invokeMethod('startMtproxy', {'port': port});
+      final result = await _vpnChannel.invokeMethod('startMtproxy', {'port': port});
       _mtprotoProxyEnabled = true;
-      return true;
+      return result; // secret from Kotlin
     } catch (e) {
-      return false;
+      return null;
     }
   }
 
@@ -105,14 +104,12 @@ class NexusZapret {
     onVpnStatusChanged?.call(status);
   }
 
-  void start() { startVpnService(); }
-  void stop() { stopVpnService(); }
+  void start() => startVpnService();
+  void stop() => stopVpnService();
 
-  Map<String, dynamic> getStats() {
-    return {
-      'vpnStatus': _vpnStatus.name,
-      'uptime': _startTime,
-      'mtprotoProxy': _mtprotoProxyEnabled,
-    };
-  }
+  Map<String, dynamic> getStats() => {
+    'vpnStatus': _vpnStatus.name,
+    'uptime': _startTime,
+    'mtprotoProxy': _mtprotoProxyEnabled,
+  };
 }

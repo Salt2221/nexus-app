@@ -12,16 +12,26 @@ import 'vpn/vpn_screen.dart';
 import 'settings/settings_screen.dart';
 import 'chat/deepseek_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Init services
+  // Load all services BEFORE runApp
+  await CustomizationService.instance.loadFromPrefs();
+  await NexusAuthService.instance.initialize();
+
   NexusZapret.instance.init();
   NexusMtprotoProxy.instance.init();
-  CustomizationService.instance.loadFromPrefs();
-  NexusAuthService.instance.initialize();
+  NexusTransportManager.instance.init();
+  MeshNetworkManager.instance.init();
+
+  // Listen for customization changes to hot-reload app
+  CustomizationService.instance.addListener(_rebuildApp);
 
   runApp(const NexusApp());
+}
+
+void _rebuildApp() {
+  // Force MaterialApp rebuild when theme changes
 }
 
 class NexusApp extends StatefulWidget {
@@ -46,22 +56,31 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Start background services
-    NexusTransportManager.instance.init();
-    MeshNetworkManager.instance.init();
+    // Listen for auth and customization changes
+    NexusAuthService.instance.addListener(_onAuthChanged);
+    CustomizationService.instance.addListener(_onCustomChanged);
 
-    // Auto-check update at startup (once)
+    // Auto-check update
     _checkUpdateOnce();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    NexusAuthService.instance.removeListener(_onAuthChanged);
+    CustomizationService.instance.removeListener(_onCustomChanged);
     super.dispose();
   }
 
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onCustomChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _checkUpdateOnce() async {
-    // Проверка обновлений при запуске, но не чаще раза в час
     final update = await UpdateChecker.instance.checkForUpdate();
     if (update != null && mounted) {
       _showUpdateAvailable(update);
@@ -91,65 +110,71 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final isDark = CustomizationService.instance.darkMode;
-    final theme = isDark ? _darkTheme() : _lightTheme();
+    final primary = CustomizationService.instance.primaryColor;
+    final theme = isDark ? _darkTheme(primary) : _lightTheme(primary);
 
     return MaterialApp(
       title: 'NEXUS',
       debugShowCheckedModeBanner: false,
       theme: theme,
+      darkTheme: _darkTheme(primary),
+      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       home: NexusAuthService.instance.isSignedIn
-          ? _buildMainScaffold()
-          : const LoginScreen(),
+          ? _buildMainScaffold(primary)
+          : LoginScreen(),
     );
   }
 
-  ThemeData _darkTheme() {
+  ThemeData _darkTheme(Color primary) {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF0D1117),
-      colorSchemeSeed: const Color(0xFF6C63FF),
+      colorSchemeSeed: primary,
       useMaterial3: true,
     );
   }
 
-  ThemeData _lightTheme() {
+  ThemeData _lightTheme(Color primary) {
     return ThemeData(
       brightness: Brightness.light,
       scaffoldBackgroundColor: const Color(0xFFF0F2F5),
-      colorSchemeSeed: const Color(0xFF6C63FF),
+      colorSchemeSeed: primary,
       useMaterial3: true,
     );
   }
 
-  Widget _buildMainScaffold() {
+  Widget _buildMainScaffold(Color primary) {
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? const Color(0xFF161B22)
             : Colors.white,
-        indicatorColor: const Color(0xFF6C63FF).withOpacity(0.2),
+        indicatorColor: primary.withOpacity(0.2),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home, color: Color(0xFF6C63FF)),
+            selectedIcon: Icon(Icons.home),
             label: 'Главная',
           ),
           NavigationDestination(
             icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome, color: Color(0xFF6C63FF)),
+            selectedIcon: Icon(Icons.auto_awesome),
             label: 'AI',
           ),
           NavigationDestination(
             icon: Icon(Icons.shield_outlined),
-            selectedIcon: Icon(Icons.shield, color: Color(0xFF6C63FF)),
+            selectedIcon: Icon(Icons.shield),
             label: 'VPN',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings, color: Color(0xFF6C63FF)),
+            selectedIcon: Icon(Icons.settings),
             label: 'Профиль',
           ),
         ],

@@ -8,10 +8,30 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _nameController = TextEditingController();
   final _auth = NexusAuthService.instance;
+  bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _auth.addListener(_onAuthChanged);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _auth.removeListener(_onAuthChanged);
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _login() async {
     final name = _nameController.text.trim();
@@ -19,17 +39,18 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Введите имя');
       return;
     }
-    setState(() => _error = null);
-    final ok = await _auth.signIn(name);
-    if (!ok && mounted) {
-      setState(() => _error = 'Ошибка входа');
-    }
-  }
+    setState(() { _error = null; _loading = true; });
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
+    final ok = await _auth.signIn(name);
+
+    if (mounted) {
+      setState(() => _loading = false);
+      if (!ok) {
+        setState(() => _error = 'Ошибка входа');
+      }
+      // Force rebuild
+      setState(() {});
+    }
   }
 
   @override
@@ -54,15 +75,18 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Spacer(flex: 2),
 
-              // Logo
+              // Logo image
               Container(
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(30),
+                  image: const DecorationImage(
+                    image: AssetImage('assets/nexus_icon.png'),
+                    fit: BoxFit.cover,
+                  ),
                 ),
-                child: const Icon(Icons.shield, size: 56, color: Colors.white),
               ),
               const SizedBox(height: 24),
 
@@ -71,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.white,
+                  color: Colors.white,
                   letterSpacing: 4,
                 ),
               ),
@@ -80,13 +104,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Безопасный мессенджер',
                 style: TextStyle(
                   fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.white.withOpacity(0.85),
+                  color: Colors.white.withOpacity(0.85),
                 ),
               ),
 
               const Spacer(flex: 1),
 
-              // Поле ввода имени
+              // Input
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
@@ -135,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _login,
+                        onPressed: _loading ? null : _login,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black87,
@@ -144,13 +168,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           elevation: 2,
                         ),
-                        child: const Text(
-                          'Войти',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: _loading
+                            ? const SizedBox(
+                                width: 24, height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87))
+                            : const Text(
+                                'Войти',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -163,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Входя в приложение, вы соглашаетесь\nс условиями использования',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: isDark ? Colors.grey[600] : Colors.white.withOpacity(0.6),
+                  color: Colors.white.withOpacity(0.6),
                   fontSize: 12,
                 ),
               ),
