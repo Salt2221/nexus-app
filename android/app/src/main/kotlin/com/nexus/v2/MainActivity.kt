@@ -20,25 +20,20 @@ class MainActivity : FlutterActivity() {
                 "startVpn" -> {
                     val intent = VpnService.prepare(this)
                     if (intent != null) {
-                        // Нужно разрешение пользователя
                         pendingResult = result
                         startActivityForResult(intent, VPN_REQUEST_CODE)
                     } else {
-                        // Уже есть разрешение
                         val svcIntent = Intent(this, NexusVpnService::class.java)
                         startForegroundService(svcIntent)
                         result.success(true)
                     }
                 }
                 "stopVpn" -> {
-                    val intent = Intent(this, NexusVpnService::class.java).apply {
-                        action = "STOP"
-                    }
+                    val intent = Intent(this, NexusVpnService::class.java).apply { action = "STOP" }
                     startService(intent)
                     result.success(true)
                 }
                 "prepareVpn" -> {
-                    // Просто запросить разрешение без запуска
                     val intent = VpnService.prepare(this)
                     if (intent != null) {
                         pendingResult = result
@@ -46,6 +41,20 @@ class MainActivity : FlutterActivity() {
                     } else {
                         result.success(true)
                     }
+                }
+                "startMtproxy" -> {
+                    val port = call.argument<Int>("port") ?: 1443
+                    val intent = Intent(this, NexusVpnService::class.java).apply {
+                        action = "START_MT_PROXY"
+                        putExtra("port", port)
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
+                "stopMtproxy" -> {
+                    val intent = Intent(this, NexusVpnService::class.java).apply { action = "STOP_MT_PROXY" }
+                    startService(intent)
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
@@ -55,7 +64,6 @@ class MainActivity : FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == VPN_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK) {
-                // Пользователь разрешил — запускаем
                 val intent = Intent(this, NexusVpnService::class.java)
                 startForegroundService(intent)
                 pendingResult?.success(true)
