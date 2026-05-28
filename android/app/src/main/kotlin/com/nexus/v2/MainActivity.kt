@@ -33,37 +33,31 @@ class MainActivity : FlutterActivity() {
                     startService(intent)
                     result.success(true)
                 }
-                "prepareVpn" -> {
-                    val intent = VpnService.prepare(this)
-                    if (intent != null) {
-                        pendingResult = result
-                        startActivityForResult(intent, VPN_REQUEST_CODE)
-                    } else {
-                        result.success(true)
-                    }
-                }
                 "startMtproxy" -> {
                     val port = call.argument<Int>("port") ?: 1443
                     val intent = Intent(this, NexusVpnService::class.java).apply {
-                        action = "START_MT_PROXY"
+                        action = "MT_START"
                         putExtra("port", port)
                     }
                     startService(intent)
-                    // Return secret to Flutter
-                    val service = NexusVpnService()
-                    result.success(service.getMtproxySecret())
+                    // Return static secret
+                    result.success(NexusVpnService.mtproxySecret)
                 }
                 "stopMtproxy" -> {
-                    val intent = Intent(this, NexusVpnService::class.java).apply { action = "STOP_MT_PROXY" }
+                    val intent = Intent(this, NexusVpnService::class.java).apply { action = "MT_STOP" }
                     startService(intent)
                     result.success(true)
                 }
                 "getMtproxyStatus" -> {
-                    // Simplified: return static status
                     val map = mapOf(
-                        "secret" to NexusVpnService().getMtproxySecret(),
-                        "port" to 1443
+                        "secret" to NexusVpnService.mtproxySecret,
+                        "port" to 1443,
+                        "running" to (NexusVpnService.mtproxySecret.isNotEmpty())
                     )
+                    result.success(map)
+                }
+                "getVpnStatus" -> {
+                    val map = mapOf("running" to true) // simplified
                     result.success(map)
                 }
                 else -> result.notImplemented()

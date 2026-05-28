@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'services/nexus_zapret.dart';
-import 'services/mtproto_proxy.dart';
-import 'services/transport_layer.dart';
-import 'services/mesh_network.dart';
 import 'services/customization_service.dart';
-import 'services/update_checker.dart';
-import 'auth/login_screen.dart';
+import 'services/update_checker.dart' show UpdateChecker, UpdateInfo;
+import 'services/mtproto_proxy.dart';
+import 'services/mesh_network.dart';
 import 'services/auth_service.dart';
+import 'auth/login_screen.dart';
 import 'home/home_screen.dart';
+import 'chat/deepseek_screen.dart';
 import 'vpn/vpn_screen.dart';
 import 'settings/settings_screen.dart';
-import 'chat/deepseek_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,17 +20,9 @@ void main() async {
 
   NexusZapret.instance.init();
   NexusMtprotoProxy.instance.init();
-  NexusTransportManager.instance.init();
   MeshNetworkManager.instance.init();
 
-  // Listen for customization changes to hot-reload app
-  CustomizationService.instance.addListener(_rebuildApp);
-
   runApp(const NexusApp());
-}
-
-void _rebuildApp() {
-  // Force MaterialApp rebuild when theme changes
 }
 
 class NexusApp extends StatefulWidget {
@@ -56,7 +47,6 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Listen for auth and customization changes
     NexusAuthService.instance.addListener(_onAuthChanged);
     CustomizationService.instance.addListener(_onCustomChanged);
 
@@ -81,18 +71,20 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
   }
 
   Future<void> _checkUpdateOnce() async {
-    final update = await UpdateChecker.instance.checkForUpdate();
-    if (update != null && mounted) {
-      _showUpdateAvailable(update);
-    }
+    try {
+      final update = await UpdateChecker.instance.checkForUpdate();
+      if (update != null && mounted) {
+        _showUpdateAvailable(update);
+      }
+    } catch (_) {}
   }
 
-  void _showUpdateAvailable(update) {
+  void _showUpdateAvailable(UpdateInfo update) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Доступно обновление'),
-        content: Text('Версия ${update.versionName} доступна.\n${update.changelog.length > 200 ? update.changelog.substring(0, 200) + '...' : update.changelog}'),
+        content: Text('Версия ${update.versionName} (${update.versionCode})\n\n${update.changelog}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Позже')),
           FilledButton(
@@ -111,35 +103,22 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final isDark = CustomizationService.instance.darkMode;
     final primary = CustomizationService.instance.primaryColor;
-    final theme = isDark ? _darkTheme(primary) : _lightTheme(primary);
+    final useMaterial3 = !CustomizationService.instance.reducedMotion;
+
+    final theme = ThemeData(
+      brightness: isDark ? Brightness.dark : Brightness.light,
+      scaffoldBackgroundColor: isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5),
+      colorSchemeSeed: primary,
+      useMaterial3: useMaterial3,
+    );
 
     return MaterialApp(
       title: 'NEXUS',
       debugShowCheckedModeBanner: false,
       theme: theme,
-      darkTheme: _darkTheme(primary),
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       home: NexusAuthService.instance.isSignedIn
           ? _buildMainScaffold(primary)
-          : LoginScreen(),
-    );
-  }
-
-  ThemeData _darkTheme(Color primary) {
-    return ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: const Color(0xFF0D1117),
-      colorSchemeSeed: primary,
-      useMaterial3: true,
-    );
-  }
-
-  ThemeData _lightTheme(Color primary) {
-    return ThemeData(
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: const Color(0xFFF0F2F5),
-      colorSchemeSeed: primary,
-      useMaterial3: true,
+          : const LoginScreen(),
     );
   }
 

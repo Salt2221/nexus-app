@@ -30,9 +30,15 @@ class NexusZapret {
   bool get mtprotoProxyEnabled => _mtprotoProxyEnabled;
   VpnServiceStatus get vpnStatus => _vpnStatus;
 
-  int _startTime = 0;
+  int _uptime = 0;
   Timer? _timer;
-  int get uptimeSeconds => _startTime;
+  int get uptimeSeconds => _uptime;
+
+  // Security info (placeholder)
+  bool get hasThreats => false;
+  int get threatsBlocked => 0;
+  int get dataSaved => 0;
+  String get currentServer => "";
 
   void Function(VpnServiceStatus status)? onVpnStatusChanged;
 
@@ -52,9 +58,9 @@ class NexusZapret {
       if (result == true) {
         _running = true;
         _setStatus(VpnServiceStatus.connected);
-        _startTime = 0;
+        _uptime = 0;
         _timer?.cancel();
-        _timer = Timer.periodic(const Duration(seconds: 1), (_) => _startTime++);
+        _timer = Timer.periodic(const Duration(seconds: 1), (_) => _uptime++);
         return true;
       } else {
         _setStatus(VpnServiceStatus.denied);
@@ -70,6 +76,7 @@ class NexusZapret {
     try {
       await _vpnChannel.invokeMethod('stopVpn');
       _running = false;
+      _mtprotoProxyEnabled = false;
       _setStatus(VpnServiceStatus.disconnected);
       _timer?.cancel();
       return true;
@@ -79,11 +86,11 @@ class NexusZapret {
   }
 
   /// Start MTProto proxy, returns secret string
-  Future<dynamic> startMtproto({int port = 1443}) async {
+  Future<String?> startMtproto({int port = 1443}) async {
     try {
-      final result = await _vpnChannel.invokeMethod('startMtproxy', {'port': port});
-      _mtprotoProxyEnabled = true;
-      return result; // secret from Kotlin
+      final secret = await _vpnChannel.invokeMethod<String>('startMtproxy', {'port': port});
+      _mtprotoProxyEnabled = secret != null && secret.isNotEmpty;
+      return secret;
     } catch (e) {
       return null;
     }
@@ -109,7 +116,7 @@ class NexusZapret {
 
   Map<String, dynamic> getStats() => {
     'vpnStatus': _vpnStatus.name,
-    'uptime': _startTime,
+    'uptime': _uptime,
     'mtprotoProxy': _mtprotoProxyEnabled,
   };
 }
