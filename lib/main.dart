@@ -4,11 +4,13 @@ import 'services/mtproto_proxy.dart';
 import 'services/transport_layer.dart';
 import 'services/mesh_network.dart';
 import 'services/customization_service.dart';
+import 'services/update_checker.dart';
 import 'auth/login_screen.dart';
 import 'services/auth_service.dart';
 import 'home/home_screen.dart';
 import 'vpn/vpn_screen.dart';
 import 'settings/settings_screen.dart';
+import 'chat/deepseek_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +36,7 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
 
   final List<Widget> _pages = const [
     HomeScreen(),
+    DeepSeekChatScreen(),
     VpnScreen(),
     SettingsScreen(),
   ];
@@ -46,73 +49,111 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
     // Start background services
     NexusTransportManager.instance.init();
     MeshNetworkManager.instance.init();
+
+    // Auto-check update at startup (once)
+    _checkUpdateOnce();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    MeshNetworkManager.instance.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkUpdateOnce() async {
+    // Проверка обновлений при запуске, но не чаще раза в час
+    final update = await UpdateChecker.instance.checkForUpdate();
+    if (update != null && mounted) {
+      _showUpdateAvailable(update);
+    }
+  }
+
+  void _showUpdateAvailable(update) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Доступно обновление'),
+        content: Text('Версия ${update.versionName} доступна.\n${update.changelog.length > 200 ? update.changelog.substring(0, 200) + '...' : update.changelog}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Позже')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              UpdateChecker.instance.applyUpdate();
+            },
+            child: const Text('Обновить'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: CustomizationService.instance,
-      builder: (context, _) {
-        final isDark = CustomizationService.instance.darkMode;
-        return MaterialApp(
-          title: 'NEXUS',
-          debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            brightness: Brightness.light,
-            colorSchemeSeed: CustomizationService.instance.primaryColor,
-            useMaterial3: true,
+    final isDark = CustomizationService.instance.darkMode;
+    final theme = isDark ? _darkTheme() : _lightTheme();
+
+    return MaterialApp(
+      title: 'NEXUS',
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      home: NexusAuthService.instance.isSignedIn
+          ? _buildMainScaffold()
+          : const LoginScreen(),
+    );
+  }
+
+  ThemeData _darkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF0D1117),
+      colorSchemeSeed: const Color(0xFF6C63FF),
+      useMaterial3: true,
+    );
+  }
+
+  ThemeData _lightTheme() {
+    return ThemeData(
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF0F2F5),
+      colorSchemeSeed: const Color(0xFF6C63FF),
+      useMaterial3: true,
+    );
+  }
+
+  Widget _buildMainScaffold() {
+    return Scaffold(
+      body: _pages[_currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF161B22)
+            : Colors.white,
+        indicatorColor: const Color(0xFF6C63FF).withOpacity(0.2),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home, color: Color(0xFF6C63FF)),
+            label: 'Главная',
           ),
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            colorSchemeSeed: CustomizationService.instance.primaryColor,
-            useMaterial3: true,
+          NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome, color: Color(0xFF6C63FF)),
+            label: 'AI',
           ),
-          themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          home: ListenableBuilder(
-            listenable: NexusAuthService.instance,
-            builder: (context, _) {
-              if (!NexusAuthService.instance.isSignedIn) {
-                return const LoginScreen();
-              }
-              return Scaffold(
-                body: IndexedStack(
-                  index: _currentIndex,
-                  children: _pages,
-                ),
-                bottomNavigationBar: NavigationBar(
-                  selectedIndex: _currentIndex,
-                  onDestinationSelected: (i) => setState(() => _currentIndex = i),
-                  backgroundColor: isDark ? const Color(0xFF161B22) : Colors.white,
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home),
-                      label: 'Чаты',
-                    ),
-                    NavigationDestination(
-                      icon: ImageIcon(AssetImage('assets/vpn_icon.jpg'), size: 24),
-                      selectedIcon: ImageIcon(AssetImage('assets/vpn_icon.jpg'), size: 24),
-                      label: 'VPN',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.person_outline),
-                      selectedIcon: Icon(Icons.person),
-                      label: 'Профиль',
-                    ),
-                  ],
-                ),
-              );
-            },
+          NavigationDestination(
+            icon: Icon(Icons.shield_outlined),
+            selectedIcon: Icon(Icons.shield, color: Color(0xFF6C63FF)),
+            label: 'VPN',
           ),
-        );
-      },
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings, color: Color(0xFF6C63FF)),
+            label: 'Профиль',
+          ),
+        ],
+      ),
     );
   }
 }
