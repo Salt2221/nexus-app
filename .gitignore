@@ -26,3 +26,4 @@ android/.gradle/
 android/app/.cxx/
 android/build/
 android/local.properties
+.dart_tool/
