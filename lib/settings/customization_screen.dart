@@ -228,7 +228,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   ? Border.all(color: Colors.white, width: 3)
                   : null,
               boxShadow: _service.primaryColor == c
-                  ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 8)]
+                  ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 8)]
                   : null,
             ),
             child: _service.primaryColor == c
@@ -260,7 +260,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
     return ChoiceChip(
       label: Text(label, style: const TextStyle(fontSize: 13)),
       selected: sel,
-      selectedColor: const Color(0xFF6C63FF).withOpacity(0.2),
+      selectedColor: const Color(0xFF6C63FF).withValues(alpha: 0.2),
       onSelected: (v) {
         if (v) _service.setLanguage(code);
       },

@@ -46,8 +46,8 @@ android {
         applicationId = "com.nexus.v2"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.1"
+        versionCode = 4
+        versionName = "1.0.4"
         multiDexEnabled = true
         ndk {
             abiFilters += listOf("arm64-v8a")

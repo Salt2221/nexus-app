@@ -95,7 +95,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF).withOpacity(0.08),
+                      color: const Color(0xFF6C63FF).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Row(
@@ -310,7 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFF6C63FF).withOpacity(0.1),
+                color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: const Color(0xFF6C63FF), size: 22),
@@ -349,7 +349,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         secondary: Container(
           width: 36, height: 36,
           decoration: BoxDecoration(
-            color: const Color(0xFF6C63FF).withOpacity(0.1),
+            color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: const Color(0xFF6C63FF), size: 20),
@@ -378,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         leading: Container(
           width: 36, height: 36,
           decoration: BoxDecoration(
-            color: const Color(0xFF6C63FF).withOpacity(0.1),
+            color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: const Color(0xFF6C63FF), size: 20),

@@ -34,6 +34,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final cs = CustomizationService.instance;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5);
 
@@ -208,9 +209,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isMe ? const Color(0xFF6C63FF) : Colors.grey[700],
-          borderRadius: BorderRadius.circular(18).copyWith(
-            bottomRight: isMe ? const Radius.circular(4) : null,
-            bottomLeft: !isMe ? const Radius.circular(4) : null,
+          borderRadius: BorderRadius.circular(CustomizationService.instance.cornerRadius).copyWith(
+            bottomRight: isMe ? Radius.circular(4) : null,
+            bottomLeft: !isMe ? Radius.circular(4) : null,
           ),
         ),
         child: Column(
@@ -221,11 +222,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(sender, style: TextStyle(fontSize: 10, color: Colors.white60)),
               ),
-            Text(text, style: const TextStyle(color: Colors.white)),
+            Text(text, style: TextStyle(color: Colors.white, fontSize: CustomizationService.instance.messageFontSize)),
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text('${time.hour}:${time.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.6))),
+                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.6))),
             ),
           ],
         ),

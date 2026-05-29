@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(30),
                   image: const DecorationImage(
                     image: AssetImage('assets/nexus_icon.png'),
@@ -104,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                 'Безопасный мессенджер',
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withValues(alpha: 0.85),
                 ),
               ),
 
@@ -126,11 +126,11 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                       decoration: InputDecoration(
                         hintText: 'Ваше имя',
                         hintStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 18,
                         ),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.1),
+                        fillColor: Colors.white.withValues(alpha: 0.1),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
@@ -138,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide(
-                            color: Colors.white.withOpacity(0.3),
+                            color: Colors.white.withValues(alpha: 0.3),
                           ),
                         ),
                       ),
@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                 'Входя в приложение, вы соглашаетесь\nс условиями использования',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 12,
                 ),
               ),

@@ -146,7 +146,7 @@ class _DeepSeekChatScreenState extends State<DeepSeekChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.auto_awesome, size: 64, color: const Color(0xFF6C63FF).withOpacity(0.3)),
+          Icon(Icons.auto_awesome, size: 64, color: const Color(0xFF6C63FF).withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text('NEXUS AI', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
           const SizedBox(height: 8),
@@ -175,8 +175,8 @@ class _DeepSeekChatScreenState extends State<DeepSeekChatScreen> {
         _textController.text = text;
         _sendMessage();
       },
-      backgroundColor: const Color(0xFF6C63FF).withOpacity(0.1),
-      side: BorderSide(color: const Color(0xFF6C63FF).withOpacity(0.3)),
+      backgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.1),
+      side: BorderSide(color: const Color(0xFF6C63FF).withValues(alpha: 0.3)),
     );
   }
 

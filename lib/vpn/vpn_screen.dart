@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import '../services/nexus_zapret.dart';
+import '../services/mtproto_proxy.dart';
+import '../services/socks5_proxy.dart';
 
 const _vpnChannel = MethodChannel('com.nexus.v2/vpn');
 
@@ -17,6 +19,7 @@ class _VpnScreenState extends State<VpnScreen> {
   Timer? _timer;
   String? _mtproxySecret;
   bool _mtproxyConnected = false;
+  bool _socks5Running = false;
 
   @override
   void initState() {
@@ -38,10 +41,16 @@ class _VpnScreenState extends State<VpnScreen> {
       final status = await _vpnChannel.invokeMethod<Map>('getMtproxyStatus');
       if (status != null && mounted) {
         setState(() {
-          _mtproxySecret = status['secret'] as String?;
+          _mtproxySecret = (status['secret'] as String?) ?? NexusMtprotoProxy.instance.secret;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _mtproxySecret = NexusMtprotoProxy.instance.secret;
+        });
+      }
+    }
   }
 
   Future<void> _toggleVpn() async {
@@ -58,13 +67,32 @@ class _VpnScreenState extends State<VpnScreen> {
       final secret = await _zapret.startMtproto();
       if (mounted) {
         setState(() {
-          _mtproxyConnected = secret != null;
-          if (secret is String && secret.isNotEmpty) _mtproxySecret = secret;
+          _mtproxyConnected = secret != null && secret!.isNotEmpty;
+          if (secret != null && secret.isNotEmpty) {
+            _mtproxySecret = secret;
+            _mtproxyConnected = true;
+          }
         });
       }
+      // Force reload status from native service
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _loadMtproxyStatus();
     } else {
       await _zapret.stopMtproto();
-      if (mounted) setState(() => _mtproxyConnected = false);
+      if (mounted) setState(() {
+        _mtproxyConnected = false;
+        _mtproxySecret = null;
+      });
+    }
+  }
+
+  Future<void> _toggleSocks5(bool val) async {
+    if (val) {
+      final ok = await Socks5Proxy.instance.start();
+      if (mounted) setState(() => _socks5Running = ok);
+    } else {
+      await Socks5Proxy.instance.stop();
+      if (mounted) setState(() => _socks5Running = false);
     }
   }
 
@@ -130,7 +158,7 @@ class _VpnScreenState extends State<VpnScreen> {
                       color: vpnRunning ? const Color(0xFF6C63FF) : Colors.grey[600],
                       borderRadius: BorderRadius.circular(34),
                       boxShadow: vpnRunning ? [
-                        BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.3), blurRadius: 15, spreadRadius: 2)
+                        BoxShadow(color: const Color(0xFF6C63FF).withValues(alpha: 0.3), blurRadius: 15, spreadRadius: 2)
                       ] : [],
                     ),
                     child: Icon(
@@ -185,9 +213,9 @@ class _VpnScreenState extends State<VpnScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.1),
+                          color: Colors.amber.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                         ),
                         child: const Text('SECRET', style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold, letterSpacing: 1)),
                       ),
@@ -238,6 +266,61 @@ class _VpnScreenState extends State<VpnScreen> {
                       Text('Прокси:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                       const SizedBox(width: 8),
                       Text('127.0.0.1:1443', style: TextStyle(fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // SOCKS5 Proxy
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lan, color: _socks5Running ? const Color(0xFF6C63FF) : Colors.grey[500]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('SOCKS5 Прокси', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                          Text('Локальный SOCKS5 прокси', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _socks5Running,
+                      onChanged: _toggleSocks5,
+                      activeColor: const Color(0xFF6C63FF),
+                    ),
+                  ],
+                ),
+                if (_socks5Running) ...[                  
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text('Прокси:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      const SizedBox(width: 8),
+                      Text('SOCKS5 127.0.0.1:1080', style: TextStyle(fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text('Подключений:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      const SizedBox(width: 8),
+                      Text('${Socks5Proxy.instance.connections}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                     ],
                   ),
                 ],

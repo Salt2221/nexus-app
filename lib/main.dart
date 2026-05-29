@@ -134,7 +134,7 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? const Color(0xFF161B22)
             : Colors.white,
-        indicatorColor: primary.withOpacity(0.2),
+        indicatorColor: primary.withValues(alpha: 0.2),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),

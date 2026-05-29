@@ -27,7 +27,7 @@ class CustomizedAppBar extends StatelessWidget implements PreferredSizeWidget {
         fontSize: service.appBarFontSize,
         fontWeight: FontWeight.bold,
       )),
-      backgroundColor: service.primaryColor.withOpacity(0.9),
+      backgroundColor: service.primaryColor.withValues(alpha: 0.9),
       foregroundColor: Colors.white,
       elevation: 0,
       leading: leading,
@@ -68,7 +68,7 @@ class CustomizedBubble extends StatelessWidget {
           bottomLeft: !isMe ? const Radius.circular(4) : null,
         ),
         boxShadow: shadow != null ? [BoxShadow(
-          color: shadow.withOpacity(0.3),
+          color: shadow.withValues(alpha: 0.3),
           blurRadius: 6,
           offset: const Offset(0, 2),
         )] : null,
@@ -82,7 +82,7 @@ class CustomizedBubble extends StatelessWidget {
         ),
         border: border != null ? Border.all(color: border, width: 1) : null,
         boxShadow: shadow != null ? [BoxShadow(
-          color: shadow.withOpacity(0.3),
+          color: shadow.withValues(alpha: 0.3),
           blurRadius: 6,
           offset: const Offset(0, 2),
         )] : null,
@@ -108,7 +108,7 @@ class CustomizedBubble extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   '${timestamp!.hour}:${timestamp!.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.6)),
+                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.6)),
                 ),
               ),
           ],
@@ -160,7 +160,7 @@ class CustomizedChatBackground extends StatelessWidget {
 
     return Container(
       color: service.backgroundOpacity > 0
-          ? Colors.black.withOpacity(service.backgroundOpacity)
+          ? Colors.black.withValues(alpha: service.backgroundOpacity)
           : null,
       child: child,
     );

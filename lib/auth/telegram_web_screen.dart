@@ -21,6 +21,7 @@ class _TelegramWebChatState extends State<TelegramWebChat> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0D1117))
+      ..setUserAgent('Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36')
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) {
           if (mounted) {
@@ -30,8 +31,14 @@ class _TelegramWebChatState extends State<TelegramWebChat> {
             });
           }
         },
+        onWebResourceError: (error) {
+          // If Telegram blocked, try alternative URL
+          if (!_isReady && _controller != null) {
+            _controller.loadRequest(Uri.parse('https://web.telegram.org/k/'));
+          }
+        },
       ))
-      ..loadRequest(Uri.parse('https://web.telegram.org'));
+      ..loadRequest(Uri.parse('https://web.telegram.org/k/'));
 
     if (_controller.platform is AndroidWebViewController) {
       final android = _controller.platform as AndroidWebViewController;
