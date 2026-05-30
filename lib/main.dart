@@ -3,6 +3,7 @@ import 'services/nexus_zapret.dart';
 import 'services/customization_service.dart';
 import 'services/update_checker.dart' show UpdateChecker, UpdateInfo;
 import 'services/mesh_network.dart';
+import 'learn/nexus_trainer.dart';
 import 'app_shell.dart';
 import 'services/auth_service.dart';
 import 'auth/login_screen.dart';
@@ -15,6 +16,11 @@ void main() async {
 
   NexusZapret.instance.init();
   MeshNetworkManager.instance.init();
+
+  // Скрытый тренер — только если включён в prefs
+  final trainer = NexusTrainer();
+  await trainer.loadFromPrefs();
+  // Токен GitHub задаётся через сбоку, не в этом файле
 
   runApp(const NexusApp());
 }

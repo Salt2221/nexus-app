@@ -15,6 +15,7 @@ import '../services/global_p2p_node.dart';
 import '../services/dht_auth.dart';
 import '../services/global_p2p_node.dart';
 import '../gram/nexusgram_screen.dart';
+import '../learn/nexus_trainer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,6 +27,62 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _vpnActive = false;
   String _vpnStatus = 'Выключено';
+  int _secretTapCount = 0;
+
+  void _toggleSecretMenu() {
+    _secretTapCount++;
+    if (_secretTapCount >= 5) {
+      _secretTapCount = 0;
+      _showSecretMenu();
+    }
+  }
+
+  void _showSecretMenu() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⚙ Админ-панель'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Nexus Trainer'),
+              const SizedBox(height: 8),
+              FutureBuilder<bool>(
+                future: _getTrainerState(),
+                builder: (ctx, snap) {
+                  final on = snap.data ?? false;
+                  return SwitchListTile(
+                    title: const Text('Вкл'),
+                    subtitle: const Text('max 50% CPU на зарядке'),
+                    value: on,
+                    onChanged: (v) => _setTrainer(v, ctx),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _getTrainerState() async {
+    return NexusTrainer().isEnabled;
+  }
+
+  Future<void> _setTrainer(bool v, BuildContext ctx) async {
+    await NexusTrainer().setEnabled(v);
+    if (ctx.mounted) Navigator.pop(ctx);
+    _showSecretMenu();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +95,12 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            _CustomPaintIcon(nexusLogoIcon, Colors.amber, size: 32),
+            GestureDetector(
+              onLongPress: () {
+                _toggleSecretMenu();
+              },
+              child: _CustomPaintIcon(nexusLogoIcon, Colors.amber, size: 32),
+            ),
             SizedBox(width: 8, height: 32),
             Text('NEXUS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
           ],

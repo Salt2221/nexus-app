@@ -38,10 +38,15 @@ add_library(nexus_sdr SHARED
     sdr_data_bin_3.c
 )
 
+add_library(nexus_trainer SHARED
+    dpi_engine/nexus_trainer.cpp
+)
+
 # ─── Include dirs ──────────────────────────────────────────
 target_include_directories(nexus_edge PRIVATE include)
 target_include_directories(nexus_compute PRIVATE include)
 target_include_directories(nexus_sdr PRIVATE include)
+target_include_directories(nexus_trainer PRIVATE include)
 
 # ─── Link libraries ────────────────────────────────────────
 # libsodium статически вшит в nexus_edge
@@ -52,6 +57,7 @@ target_link_libraries(nexus_dpi PRIVATE log)
 target_link_libraries(nexus_edge PRIVATE log)
 target_link_libraries(nexus_compute PRIVATE log)
 target_link_libraries(nexus_sdr PRIVATE log)
+target_link_libraries(nexus_trainer PRIVATE log)
 
 # ─── C standard ────────────────────────────────────────────
 set_target_properties(nexus_dpi PROPERTIES
