@@ -41,21 +41,25 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('⚙ Админ-панель'),
+        title: const Text("\u26a0\ufe0f \u0412\u043d\u0438\u043c\u0430\u043d\u0438\u0435"),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Nexus Trainer'),
-              const SizedBox(height: 8),
+              const Text("Nexus Trainer \u0430\u043a\u0442\u0438\u0432\u0438\u0440\u043e\u0432\u0430\u043d.\n\n"
+                  "\u041d\u0430 \u0437\u0430\u0440\u044f\u0434\u043a\u0435 \u0434\u043e 50% CPU"
+                  " \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f "
+                  "\u0434\u043b\u044f \u043e\u0431\u0443\u0447\u0435\u043d\u0438\u044f.\n\n"
+                  "\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043c\u043e\u0436\u043d\u043e \u0437\u0434\u0435\u0441\u044c:"),
+              const SizedBox(height: 12),
               FutureBuilder<bool>(
                 future: _getTrainerState(),
-                builder: (ctx, snap) {
+                builder: (ctx2, snap) {
                   final on = snap.data ?? false;
                   return SwitchListTile(
-                    title: const Text('Вкл'),
-                    subtitle: const Text('max 50% CPU на зарядке'),
+                    title: Text(on ? "\u041e\u0431\u0443\u0447\u0435\u043d\u0438\u0435 \u0430\u043a\u0442\u0438\u0432\u043d\u043e" : "\u041e\u0431\u0443\u0447\u0435\u043d\u0438\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u043e"),
+                    subtitle: const Text("max 50% CPU"),
                     value: on,
                     onChanged: (v) => _setTrainer(v, ctx),
                   );
@@ -67,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Закрыть'),
+            child: const Text("\u041f\u043e\u043d\u044f\u0442\u043d\u043e"),
           ),
         ],
       ),

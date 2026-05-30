@@ -40,7 +40,7 @@ class NexusTrainer {
 
   // ── публичный API ──
 
-  /// Включить/выключить (из секретной настройки)
+  /// Включить/выключить (из скрытой настройки)
   Future<void> setEnabled(bool v) async {
     if (v == _enabled) return;
     _enabled = v;
@@ -50,9 +50,10 @@ class NexusTrainer {
   }
 
   /// Прочитать флаг из prefs (при старте приложения)
+  /// По умолчанию включено.
   Future<void> loadFromPrefs() async {
     final p = await SharedPreferences.getInstance();
-    _enabled = p.getBool("__nexus_learn") ?? false;
+    _enabled = p.getBool("__nexus_learn") ?? true; // ← true по умолчанию
     _githubToken = p.getString("__nexus_github_token");
     if (_enabled) _start();
   }
