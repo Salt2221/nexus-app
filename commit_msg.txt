@@ -1,0 +1,13 @@
+NexusGram: фейковый Telegram-интерфейс (без WebView)
+
+Удалён telegram_web_screen.dart (WebView).
+Создан NexusGramScreen вместо него:
+- Заголовок NexusGram в стиле Telegram (синий AppBar)
+- Баннер с инструкцией для настройки настоящего приложения
+- Кнопка Open Telegram (tg://) открывает приложение
+- Кнопка Web Version (web.telegram.org/k/) браузер
+- Фейковый список чатов для атмосферы
+- Подсказка с портом SOCKS5
+
+Добавлена кнопка на главный экран (home_screen)
+между VPN и Настройками
