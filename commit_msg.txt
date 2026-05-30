@@ -1,13 +1,20 @@
-NexusGram: фейковый Telegram-интерфейс (без WebView)
+NexusGram: настоящий Telegram клиент на MTProto + SOCKS5
 
-Удалён telegram_web_screen.dart (WebView).
-Создан NexusGramScreen вместо него:
-- Заголовок NexusGram в стиле Telegram (синий AppBar)
-- Баннер с инструкцией для настройки настоящего приложения
-- Кнопка Open Telegram (tg://) открывает приложение
-- Кнопка Web Version (web.telegram.org/k/) браузер
-- Фейковый список чатов для атмосферы
-- Подсказка с портом SOCKS5
+Удалён WebView (telegram_web_screen.dart).
+Создан полноценный Telegram-клиент внутри NEXUS:
 
-Добавлена кнопка на главный экран (home_screen)
-между VPN и Настройками
+lib/gram/nexusgram_screen.dart — главный экран NexusGram:
+- Нативная авторизация (номер + код из Telegram)
+- SOCKS5: 127.0.0.1:1443 через NEXUS
+- Список чатов с аватарами
+- Чат с отправкой сообщений
+- Пузырьки входящие/исходящие
+- Выход и сброс сессии
+- Заголовок "NexusGram" (синий AppBar)
+
+lib/gram/telegram_mtproto.dart — MTProto слой:
+- Socks5Client для работы через NEXUS proxy
+- Telegram API через прокси
+- Весь трафик идёт через локальный SOCKS5
+
+pubspec.yaml: добавлены telegram_client, socks5_proxy
