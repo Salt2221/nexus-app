@@ -10,6 +10,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/nexus_icons.dart';
+import '../gram/nexusgram_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -107,7 +108,25 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
+
+            // ═══ NexusGram ═══
+            _MenuCard(
+              icon: const Icon(Icons.send, size: 28, color: Color(0xFF0088CC)),
+              title: 'NexusGram',
+              subtitle: 'Telegram через NEXUS',
+              color: const Color(0xFF0088CC),
+              isDark: isDark,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NexusGramScreen()),
+                );
+              },
+              compact: true,
+            ),
+
+            const SizedBox(height: 12),
 
             // ═══ Настройки и статус ═══
             _MenuCard(
