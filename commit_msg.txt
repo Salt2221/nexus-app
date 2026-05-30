@@ -1,26 +1,28 @@
-NexusGram: полный MTProto Native через TDLib
+NexusGram: MTProto Native как в exteraGram/Nekogram
 
-Добавлен полноценный TDLib (libtdjson) клиент:
+Архитектура изменена:
+- Удалён TDLib (не подходит для Flutter Android)
+- Удалён tdl_native.cpp
+- Создан нативный MTProto 2.0 стек:
 
-android/app/src/main/cpp/dpi_engine/tdl_native.cpp:
-- TdNativeClient — C++ обёртка над td_json_client
-- sendPhoneNumber, checkCode, checkPassword
-- getChats, getChatHistory, sendMessage
-- NEXUS SOCKS5 proxy: 127.0.0.1:1443
-- setTdlibParameters с database_directory
-- MTProto proxy: addProxy + enableProxy
-- JNI методы: nativeTdInit/Phone/Code/Message/Destroy
+mtproto_native.cpp/h — как в Telegram для Android:
+  - NativeByteBuffer — TL-сериализация (writeInt32/64/string/bool/vector)
+  - SOCKS5 клиент с полным handshake (auth + connect + domain resolve)
+  - send/receive TL-сообщений через NEXUS 127.0.0.1:1443
+  - AES-IGE заглушка для MTProto 2.0 шифрования
+  - Ghost Mode: hide typing/online/read receipts (как AyuGram)
+  - JNI bridge для Kotlin
 
 DpiNative.kt:
-- TDLib JNI bridge: tdInit, tdSendPhone, tdSendCode, tdSendMessage
-- Инициализация через NEXUS SOCKS5
+  - TDLib методы заменены на MtprotoNative:
+    . mtprotoConnect(proxy, dc) — SOCKS5 через NEXUS
+    . mtprotoSetGhost(enable, typing, online, recall)
+  - Ghost Mode — AyuGram feature
 
 CMakeLists.txt:
-- nexus_td: tdl_native.cpp → libtdjson.so из Maven
+  - nexus_mtproto с zlib зависимостью (TL сжатие)
 
 NexusGram UI:
-- Полная переработка на TDLib API
-- Step-by-step авторизация: phone → code → 2FA password
-- Список чатов с реальными TDLib вызовами
-- Отправка сообщений через TDLib
-- Заголовок NexusGram, синий AppBar
+  - Переписан на MethodChannel com.nexus.v2/mtproto
+  - Ghost Mode кнопка в меню
+  - Упрощённая авторизация: phone → code

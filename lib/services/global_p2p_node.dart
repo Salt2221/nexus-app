@@ -50,8 +50,14 @@ class GlobalP2PNode extends ChangeNotifier {
   // ══ Геттеры ══
   bool get running => _running;
   int get peerCount => buckets.fold(0, (s, b) => s + b.peers.length);
-  int get shardCount => shards.length;
   String get transportName => transport.name;
+  int get shardCount => shards.length;
+  /// Register in P2P network
+  Future<void> register(String identity) async {
+    if (!_running) await start();
+    debugPrint("[P2P] Registered: $identity");
+    notifyListeners();
+  }
 
   List<Peer> get allPeers {
     final seen = <String>{};
@@ -478,6 +484,11 @@ class DhtNetworkManager extends ChangeNotifier {
       debugPrint("[DHT-MGR] init fail: $e");
       return false;
     }
+  }
+
+  Future<void> register(String identity) async {
+    await init();
+    if (_node != null) await _node!.register(identity);
   }
 
   @override

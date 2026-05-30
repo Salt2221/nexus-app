@@ -20,6 +20,7 @@
 #include <array>
 #include <functional>
 #include <chrono>
+#include <random>
 
 // ═══════════════════════════════════════════════════════════════
 // Типы

@@ -11,7 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/nexus_icons.dart';
-import '../services/dht_network.dart';
+import '../services/global_p2p_node.dart';
 import '../services/dht_auth.dart';
 import '../services/global_p2p_node.dart';
 import '../gram/nexusgram_screen.dart';
@@ -821,7 +821,7 @@ class _RegistrationSheetState extends State<_RegistrationSheet> {
 
       // Регистрируем в DHT сети
       final dht = DhtNetworkManager.instance;
-      final node = GlobalP2PNode.instance;
+      final node = dht;
 
       // Генерируем P2P ключи (упрощённо)
       node.register('$username:$email');
@@ -930,7 +930,7 @@ class _RegistrationSheetState extends State<_RegistrationSheet> {
       await prefs.setString('p2p_username', username);
       await prefs.setString('p2p_display', display.isNotEmpty ? display : username);
 
-      final node = GlobalP2PNode.instance;
+      final node = DhtNetworkManager.instance;
       node.register(username);
 
       setState(() => _loading = false);

@@ -22,6 +22,7 @@ import "dart:convert";
 import "dart:math";
 import "dart:typed_data";
 import "package:flutter/foundation.dart";
+import "global_p2p_node.dart";
 import "dht_network.dart";
 
 /// Профиль пользователя в децентрализованной сети
@@ -361,6 +362,25 @@ class DhtAuthService extends ChangeNotifier {
   }
 }
 
+/// DHT Node — peer в сети
+class DhtNode {
+  final DhtNetworkManager dht;
+  final String id;
+  NodeId get nodeId => NodeId.fromHex(id);
+
+  DhtNode(this.dht, this.id);
+
+  Future<bool> storeValue(String key, Map<String, dynamic> value) async {
+    return await dht.store(key, jsonEncode(value));
+  }
+
+  Future<Map<String, dynamic>?> findValue(String key) async {
+    var data = await dht.find(key);
+    if (data != null) return jsonDecode(data) as Map<String, dynamic>;
+    return null;
+  }
+}
+
 /// Транспорт через DHT — relay сообщений через пиров
 class DhtTransport {
   final DhtNode node;
@@ -368,7 +388,7 @@ class DhtTransport {
 
   Future<bool> sendMessage(String recipient, String message) async {
     var key = "inbox:$recipient:${DateTime.now().millisecondsSinceEpoch}";
-    return await node.storeValue(key, {
+    return await node.storeValue(key, <String, dynamic>{
       "from": node.nodeId.toHex(),
       "msg": message,
       "ts": DateTime.now().toIso8601String(),

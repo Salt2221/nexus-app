@@ -27,6 +27,7 @@ class _NexusGramService {
 
   bool _initialized = false;
   bool _authorized = false;
+  int _authState = 0; // 0=wait, 1=phone, 2=code, 3=ready
   bool _ghostMode = false;
   String? _phone;
 
@@ -316,7 +317,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
                         ),
                         onPressed: () async {
                           await _ng.sendCode(_codeCtrl.text.trim());
-                          setState(() => _authorized());
+                          setState(() => _onAuthorized());
                         },
                         child: const Text('Войти', style: TextStyle(color: Colors.white, fontSize: 16)),
                       ),
@@ -336,9 +337,9 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
     );
   }
 
-  void _authorized() {
+  void _onAuthorized() {
+    _ng._authorized = true;
     setState(() {
-      _authorized = true;
       _status = 'Загрузка чатов...';
     });
     _loadChats();
@@ -371,7 +372,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
                 setState(() {
                   _activeChat = null;
                   _codeSent = false;
-                  _pwdNeeded = false;
+                  // 2FA not needed in this version
                 });
               }
             },
@@ -385,7 +386,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
             itemCount: _chats.length,
             itemBuilder: (_, i) {
               final chat = _chats[i];
-              final color = colors[chat['id'] as int % colors.length];
+              final color = colors[(chat['id'] as int) % colors.length];
 
               return Container(
                 decoration: BoxDecoration(
