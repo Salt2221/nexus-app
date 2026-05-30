@@ -1,8 +1,18 @@
+// ═══════════════════════════════════════════════════════════════
+// NEXUS Настройки
+//
+// - Тема (тёмная/светлая)
+// - Размер шрифта (12-24)
+// - Скругление UI (4-32)
+// - Обновления (проверка + скачивание)
+// - О приложении
+// ═══════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
-import 'customization_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/customization_service.dart';
-import '../services/update_checker.dart' show UpdateChecker, UpdateInfo, currentVersionName;
-import '../services/auth_service.dart';
+import '../services/update_checker.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,379 +22,283 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notifications = true;
-  bool _autoBrowser = true;
-  bool _checkingUpdate = false;
-  String? _updateError;
-  bool _updateFound = false;
+  final _custom = CustomizationService.instance;
+  final _updater = UpdateChecker.instance;
+  String? _lastCheckResult;
+  bool _fontSizeChanged = false;
+  bool _radiusChanged = false;
 
   @override
   void initState() {
     super.initState();
-    UpdateChecker.instance.addListener(_onUpdateState);
+    _updater.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    UpdateChecker.instance.removeListener(_onUpdateState);
+    _updater.removeListener(() => setState(() {}));
     super.dispose();
   }
 
-  void _onUpdateState() {
-    if (mounted) setState(() {
-      _checkingUpdate = UpdateChecker.instance.checking;
-      _updateError = UpdateChecker.instance.error;
-      _updateFound = UpdateChecker.instance.hasUpdate;
-    });
-  }
-
-  Future<void> _checkForUpdate() async {
-    setState(() => _checkingUpdate = true);
-    final update = await UpdateChecker.instance.checkForUpdate();
+  Future<void> _checkUpdates() async {
+    final result = await _updater.checkForUpdate();
     if (mounted) {
       setState(() {
-        _checkingUpdate = false;
-        _updateFound = update != null;
+        if (result != null) {
+          _lastCheckResult = 'Доступна версия ${result.versionName} (${result.formattedSize})';
+        } else if (_updater.error != null) {
+          _lastCheckResult = 'Ошибка: ${_updater.error}';
+        } else {
+          _lastCheckResult = 'У вас актуальная версия';
+        }
       });
-      if (update != null) {
-        _showUpdateDialog(update);
-      } else if (UpdateChecker.instance.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UpdateChecker.instance.error!), backgroundColor: Colors.red[700]),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('У вас актуальная версия'), backgroundColor: Colors.green),
-        );
-      }
     }
-  }
-
-  void _showUpdateDialog(UpdateInfo update) {
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final uc = UpdateChecker.instance;
-          return AlertDialog(
-            title: const Text('Доступно обновление'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (uc.syncing) ...[
-                  const Text('Обновление...', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(value: uc.syncProgress > 0 ? uc.syncProgress : null),
-                  const SizedBox(height: 8),
-                  Text(uc.statusMessage ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ] else ...[
-                  Row(
-                    children: [
-                      const Text('Версия: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(update.versionName, style: const TextStyle(color: Color(0xFF6C63FF))),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (update.changelog.isNotEmpty) ...[
-                    const Text('Что нового:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(update.changelog, style: const TextStyle(fontSize: 13)),
-                  ],
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.sync, size: 16, color: Color(0xFF6C63FF)),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Обновление синхронизирует настройки, прокси и фичи приложения',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF6C63FF)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              if (!uc.syncing)
-                TextButton(
-                  onPressed: () {
-                    uc.clear();
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Позже'),
-                ),
-              if (!uc.syncing)
-                FilledButton.icon(
-                  onPressed: () async {
-                    setDialogState(() {});
-                    await uc.applyUpdate();
-                    if (ctx.mounted) {
-                      setDialogState(() {});
-                    }
-                    if (uc.statusMessage == 'Приложение обновлено') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Конфигурация обновлена!'), backgroundColor: Colors.green),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.sync, size: 18),
-                  label: const Text('Обновить'),
-                ),
-              if (uc.syncing && uc.syncProgress >= 1.0)
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Готово'),
-                ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5);
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-    final titleColor = isDark ? Colors.white : Colors.black87;
-    final subtitleColor = isDark ? Colors.grey[500] : Colors.grey[600];
-    final userName = NexusAuthService.instance.userName ?? 'Пользователь';
+    final isDark = _custom.darkMode;
+    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFF5F5F5);
+    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Профиль', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
+        title: Text('Настройки', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: cardBg,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Profile card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: const Color(0xFF6C63FF),
-                    child: Text(
-                      userName[0].toUpperCase(),
-                      style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold),
+      body: ListView(
+        padding: EdgeInsets.all(16),
+        children: [
+          // ═══ ВНЕШНИЙ ВИД ═══
+          _SectionHeader(title: 'Внешний вид', isDark: isDark),
+
+          Card(
+            color: cardBg,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: Text('Тёмная тема', style: TextStyle(color: textColor)),
+                  subtitle: Text('Переключить оформление', style: TextStyle(color: subColor, fontSize: 12)),
+                  value: _custom.darkMode,
+                  activeColor: Colors.amber,
+                  onChanged: (v) {
+                    _custom.darkMode = v;
+                    setState(() {});
+                    _custom.notifyListeners();
+                  },
+                ),
+                Divider(height: 1),
+
+                // Размер шрифта
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.text_fields, color: subColor, size: 20),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Размер шрифта', style: TextStyle(color: textColor)),
+                            Text('${(_custom.messageFontSize).toInt()} pt', style: TextStyle(color: subColor, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: Slider(
+                          value: _custom.messageFontSize,
+                          min: 12,
+                          max: 24,
+                          divisions: 12,
+                          activeColor: Colors.amber,
+                          onChanged: (v) {
+                            _custom.messageFontSize = v;
+                            _fontSizeChanged = true;
+                            setState(() {});
+                          },
+                          onChangeEnd: (v) {
+                            if (_fontSizeChanged) {
+                              _custom.notifyListeners();
+                              _fontSizeChanged = false;
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1),
+
+                // Скругление
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.rounded_corner, color: subColor, size: 20),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Скругление UI', style: TextStyle(color: textColor)),
+                            Text('${(_custom.cornerRadius).toInt()} px', style: TextStyle(color: subColor, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: Slider(
+                          value: _custom.cornerRadius,
+                          min: 4,
+                          max: 32,
+                          divisions: 14,
+                          activeColor: Colors.amber,
+                          onChanged: (v) {
+                            _custom.cornerRadius = v;
+                            _radiusChanged = true;
+                            setState(() {});
+                          },
+                          onChangeEnd: (v) {
+                            if (_radiusChanged) {
+                              _custom.notifyListeners();
+                              _radiusChanged = false;
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 16),
+
+          // ═══ ОБНОВЛЕНИЯ ═══
+          _SectionHeader(title: 'Обновления', isDark: isDark),
+
+          Card(
+            color: cardBg,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(_updater.hasUpdate ? Icons.system_update : Icons.check_circle,
+                    color: _updater.hasUpdate ? Colors.amber : Colors.green),
+                  title: Text('Версия ${_updater.currentVersionName ?? '0.0.0'}', style: TextStyle(color: textColor)),
+                  subtitle: Text(
+                    _updater.statusMessage ?? (_updater.hasUpdate ? 'Доступно обновление' : 'Актуальная версия'),
+                    style: TextStyle(color: subColor, fontSize: 12),
+                  ),
+                  trailing: _updater.downloading
+                      ? SizedBox(
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, value: _updater.downloadProgress),
+                        )
+                      : (_updater.hasUpdate
+                          ? ElevatedButton(
+                              onPressed: () => _updater.downloadUpdate(),
+                              child: Text('Скачать'),
+                            )
+                          : null),
+                ),
+                if (_updater.downloading)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(child: LinearProgressIndicator(value: _updater.downloadProgress)),
+                        SizedBox(width: 8),
+                        Text('${(_updater.downloadProgress * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 11, color: subColor)),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(userName,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: titleColor)),
-                  const SizedBox(height: 4),
-                  Text('NEXUS пользователь',
-                      style: TextStyle(fontSize: 13, color: subtitleColor)),
-                  const SizedBox(height: 16),
-                  FilledButton.tonalIcon(
-                    onPressed: () {
-                      NexusAuthService.instance.signOut();
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: const Text('Выйти'),
+                if (_lastCheckResult != null && !_updater.hasUpdate)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Text(_lastCheckResult!, style: TextStyle(fontSize: 12, color: subColor)),
                   ),
-                ],
-              ),
+                Divider(height: 1),
+                InkWell(
+                  onTap: _checkUpdates,
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_updater.checking)
+                          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        if (_updater.checking) SizedBox(width: 8),
+                        Icon(Icons.refresh, size: 16, color: Colors.amber),
+                        SizedBox(width: 8),
+                        Text(_updater.checking ? 'Проверка...' : 'Проверить обновления',
+                          style: TextStyle(color: Colors.amber, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
 
-            const SizedBox(height: 24),
+          SizedBox(height: 16),
 
-            _buildSection('НАСТРОЙКИ', isDark),
-            const SizedBox(height: 8),
-            _buildNavCard(
-              icon: Icons.palette,
-              title: 'Тема и Кастомизация',
-              subtitle: 'Акцентный цвет, фон чатов, шрифт, анимации',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CustomizationScreen()),
-              ),
-              isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor,
+          // ═══ О ПРИЛОЖЕНИИ ═══
+          _SectionHeader(title: 'О приложении', isDark: isDark),
+
+          Card(
+            color: cardBg,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.info_outline, color: Colors.blue),
+                  title: Text('NEXUS', style: TextStyle(color: textColor)),
+                  subtitle: Text('v${_updater.currentVersionName ?? '0.0.0'}', style: TextStyle(color: subColor, fontSize: 12)),
+                ),
+                ListTile(
+                  leading: Icon(Icons.developer_mode, color: Colors.teal),
+                  title: Text('Разработчик', style: TextStyle(color: textColor)),
+                  subtitle: Text('Salt2221', style: TextStyle(color: subColor, fontSize: 12)),
+                ),
+                ListTile(
+                  leading: Icon(Icons.code, color: Colors.amber),
+                  title: Text('GitHub', style: TextStyle(color: textColor)),
+                  subtitle: Text('github.com/Salt2221/nexus-app', style: TextStyle(color: subColor, fontSize: 12)),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            _buildSwitchTile(
-              icon: Icons.notifications_outlined,
-              title: 'Уведомления',
-              subtitle: 'Push-уведомления о новых сообщениях',
-              value: _notifications,
-              onChanged: (v) => setState(() => _notifications = v),
-              isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor,
-            ),
-            const SizedBox(height: 8),
-            _buildSwitchTile(
-              icon: Icons.open_in_browser,
-              title: 'Встроенный браузер',
-              subtitle: 'Открывать ссылки внутри приложения',
-              value: _autoBrowser,
-              onChanged: (v) => setState(() => _autoBrowser = v),
-              isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor,
-            ),
+          ),
 
-            const SizedBox(height: 24),
-
-            _buildSection('ОБНОВЛЕНИЯ', isDark),
-            const SizedBox(height: 8),
-            _buildNavCard(
-              icon: Icons.system_update,
-              title: 'Поиск обновлений',
-              subtitle: _checkingUpdate
-                  ? 'Проверка...'
-                  : _updateFound
-                      ? 'Доступно обновление!'
-                      : _updateError ?? 'Нажмите для проверки',
-              onTap: _checkForUpdate,
-              isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor,
-            ),
-
-            const SizedBox(height: 24),
-
-            _buildSection('О ПРИЛОЖЕНИИ', isDark),
-            const SizedBox(height: 8),
-            _buildInfoTile(icon: Icons.info_outline, title: 'Версия', value: currentVersionName, isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor),
-            _buildInfoTile(icon: Icons.code, title: 'Сборка', value: 'debug arm64', isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor),
-            _buildInfoTile(icon: Icons.flutter_dash, title: 'Flutter', value: '3.32.0', isDark: isDark, cardColor: cardColor, titleColor: titleColor, subtitleColor: subtitleColor),
-
-            const SizedBox(height: 32),
-            Center(
-              child: Text('NEXUS v$currentVersionName',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: subtitleColor, fontSize: 12)),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
+          SizedBox(height: 32),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildSection(String title, bool isDark) {
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final bool isDark;
+
+  const _SectionHeader({required this.title, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 4),
-      child: Text(title, style: TextStyle(
-        color: const Color(0xFF6C63FF), fontSize: 12,
-        fontWeight: FontWeight.bold, letterSpacing: 1.2,
-      )),
-    );
-  }
-
-  Widget _buildNavCard({
-    required IconData icon, required String title, required String subtitle,
-    required VoidCallback onTap, required bool isDark,
-    required Color cardColor, required Color titleColor, Color? subtitleColor,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: cardColor, borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
+      padding: EdgeInsets.only(bottom: 8, left: 4),
+      child: Text(title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: isDark ? Colors.grey[400] : Colors.grey[700],
         ),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: const Color(0xFF6C63FF), size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(color: titleColor, fontWeight: FontWeight.w600, fontSize: 15)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: TextStyle(color: subtitleColor, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: isDark ? Colors.grey[700] : Colors.grey[400], size: 22),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile({
-    required IconData icon, required String title, required String subtitle,
-    required bool value, required ValueChanged<bool> onChanged,
-    required bool isDark, required Color cardColor,
-    required Color titleColor, Color? subtitleColor,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-      ),
-      child: SwitchListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        secondary: Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: const Color(0xFF6C63FF), size: 20),
-        ),
-        title: Text(title, style: TextStyle(color: titleColor, fontWeight: FontWeight.w500)),
-        subtitle: Text(subtitle, style: TextStyle(color: subtitleColor, fontSize: 12)),
-        value: value, onChanged: onChanged,
-        activeColor: const Color(0xFF6C63FF),
-      ),
-    );
-  }
-
-  Widget _buildInfoTile({
-    required IconData icon, required String title, required String value,
-    required bool isDark, required Color cardColor,
-    required Color titleColor, Color? subtitleColor,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: cardColor, borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        leading: Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: const Color(0xFF6C63FF), size: 20),
-        ),
-        title: Text(title, style: TextStyle(color: titleColor)),
-        trailing: Text(value, style: TextStyle(color: subtitleColor)),
       ),
     );
   }

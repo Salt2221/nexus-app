@@ -1,399 +1,369 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:flutter/services.dart';
-import '../services/nexus_zapret.dart';
+import 'package:flutter/material.dart';
 import '../services/mtproto_proxy.dart';
 import '../services/socks5_proxy.dart';
 
-const _vpnChannel = MethodChannel('com.nexus.v2/vpn');
-
 class VpnScreen extends StatefulWidget {
   const VpnScreen({super.key});
-
   @override
   State<VpnScreen> createState() => _VpnScreenState();
 }
 
-class _VpnScreenState extends State<VpnScreen> {
-  final _zapret = NexusZapret.instance;
-  Timer? _timer;
-  String? _mtproxySecret;
-  bool _mtproxyConnected = false;
-  bool _socks5Running = false;
+class _VpnScreenState extends State<VpnScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final _mt = NexusMtprotoProxy();
+  final _socks = Socks5Proxy.instance;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+    _tabController = TabController(length: 3, vsync: this);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {}); // обновляем UI раз в секунду
     });
-    _loadMtproxyStatus();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _refreshTimer?.cancel();
+    _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMtproxyStatus() async {
-    try {
-      final status = await _vpnChannel.invokeMethod<Map>('getMtproxyStatus');
-      if (status != null && mounted) {
-        setState(() {
-          _mtproxySecret = (status['secret'] as String?) ?? NexusMtprotoProxy.instance.secret;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _mtproxySecret = NexusMtprotoProxy.instance.secret;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggleVpn() async {
-    if (_zapret.isRunning) {
-      await _zapret.stopVpnService();
-    } else {
-      await _zapret.startVpnService();
-    }
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _toggleMtproto(bool val) async {
-    if (val) {
-      final secret = await _zapret.startMtproto();
-      if (mounted) {
-        setState(() {
-          _mtproxyConnected = secret != null && secret!.isNotEmpty;
-          if (secret != null && secret.isNotEmpty) {
-            _mtproxySecret = secret;
-            _mtproxyConnected = true;
-          }
-        });
-      }
-      // Force reload status from native service
-      await Future.delayed(const Duration(milliseconds: 500));
-      await _loadMtproxyStatus();
-    } else {
-      await _zapret.stopMtproto();
-      if (mounted) setState(() {
-        _mtproxyConnected = false;
-        _mtproxySecret = null;
-      });
-    }
-  }
-
-  Future<void> _toggleSocks5(bool val) async {
-    if (val) {
-      final ok = await Socks5Proxy.instance.start();
-      if (mounted) setState(() => _socks5Running = ok);
-    } else {
-      await Socks5Proxy.instance.stop();
-      if (mounted) setState(() => _socks5Running = false);
-    }
+  String _fmtBytes(int b) {
+    if (b < 1024) return '$b B';
+    if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
+    if (b < 1024 * 1024 * 1024) return '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(b / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5);
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-
-    final vpnRunning = _zapret.isRunning;
-    final uptime = _zapret.uptimeSeconds;
-    final mtproxy = _zapret.mtprotoProxyEnabled;
-
-    final h = (uptime ~/ 3600).toString().padLeft(2, '0');
-    final m = ((uptime % 3600) ~/ 60).toString().padLeft(2, '0');
-    final s = (uptime % 60).toString().padLeft(2, '0');
-
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text('VPN', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
+        title: const Text('Защита'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.shield), text: 'MTProto'),
+            Tab(icon: Icon(Icons.vpn_lock), text: 'SOCKS5'),
+            Tab(icon: Icon(Icons.dns), text: 'DPI'),
+          ],
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          // VPN Status
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  vpnRunning ? Icons.shield : Icons.shield_outlined,
-                  size: 72,
-                  color: vpnRunning ? const Color(0xFF6C63FF) : Colors.grey[400],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  vpnRunning ? 'Защищено' : 'Не защищено',
-                  style: TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold,
-                    color: vpnRunning ? const Color(0xFF6C63FF) : Colors.grey[500],
-                  ),
-                ),
-                if (vpnRunning) ...[
-                  const SizedBox(height: 4),
-                  Text('$h:$m:$s', style: TextStyle(fontSize: 14, color: Colors.grey[400], fontFamily: 'monospace')),
-                ],
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: _toggleVpn,
-                  child: Container(
-                    width: 68, height: 68,
-                    decoration: BoxDecoration(
-                      color: vpnRunning ? const Color(0xFF6C63FF) : Colors.grey[600],
-                      borderRadius: BorderRadius.circular(34),
-                      boxShadow: vpnRunning ? [
-                        BoxShadow(color: const Color(0xFF6C63FF).withValues(alpha: 0.3), blurRadius: 15, spreadRadius: 2)
-                      ] : [],
-                    ),
-                    child: Icon(
-                      vpnRunning ? Icons.power_settings_new : Icons.play_arrow,
-                      color: Colors.white, size: 32,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // MTProto Proxy with Secret
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.flash_on, color: mtproxy ? const Color(0xFF6C63FF) : Colors.grey[500]),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('MTProto Proxy', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                          Text('Встроенный прокси для Telegram', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: mtproxy,
-                      onChanged: vpnRunning ? _toggleMtproto : null,
-                      activeColor: const Color(0xFF6C63FF),
-                    ),
-                  ],
-                ),
-                if (mtproxy) ...[
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  // Secret display
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
-                        ),
-                        child: const Text('SECRET', style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () {
-                      if (_mtproxySecret != null) {
-                        Clipboard.setData(ClipboardData(text: _mtproxySecret!));
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secret скопирован'), duration: Duration(seconds: 2)));
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0D1117) : const Color(0xFFF5F5F5),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _mtproxySecret ?? 'Генерация...',
-                              style: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                                color: isDark ? Colors.green[300] : Colors.green[700],
-                              ),
-                            ),
-                          ),
-                          Icon(Icons.copy, size: 18, color: const Color(0xFF6C63FF)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 14, color: Colors.grey[500]),
-                      const SizedBox(width: 6),
-                      Text('Нажмите чтобы скопировать secret', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text('Прокси:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                      const SizedBox(width: 8),
-                      Text('127.0.0.1:1443', style: TextStyle(fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // SOCKS5 Proxy
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.lan, color: _socks5Running ? const Color(0xFF6C63FF) : Colors.grey[500]),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('SOCKS5 Прокси', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                          Text('Локальный SOCKS5 прокси', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _socks5Running,
-                      onChanged: _toggleSocks5,
-                      activeColor: const Color(0xFF6C63FF),
-                    ),
-                  ],
-                ),
-                if (_socks5Running) ...[                  
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text('Прокси:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                      const SizedBox(width: 8),
-                      Text('SOCKS5 127.0.0.1:1080', style: TextStyle(fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text('Подключений:', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                      const SizedBox(width: 8),
-                      Text('${Socks5Proxy.instance.connections}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // DPI Profiles
-          Text('Профили обхода',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-          const SizedBox(height: 8),
-          ..._zapret.profiles.map((p) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? const Color(0xFF30363D) : Colors.grey[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(p.enabled ? Icons.check_circle : Icons.circle_outlined,
-                  color: p.enabled ? const Color(0xFF6C63FF) : Colors.grey[500], size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(p.name, style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : Colors.black87)),
-                      Text(p.description, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: p.enabled,
-                  onChanged: vpnRunning ? (val) => setState(() => p.enabled = val) : null,
-                  activeColor: const Color(0xFF6C63FF),
-                ),
-              ],
-            ),
-          )),
-
-          // Info
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1A1E2E) : const Color(0xFFF0EEFF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: const Color(0xFF6C63FF), size: 20),
-                    const SizedBox(width: 8),
-                    Text('Как использовать', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '1. Включите VPN кнопкой выше\n'
-                  '2. Включите MTProto Proxy\n'
-                  '3. Скопируйте secret\n'
-                  '4. Добавьте прокси 127.0.0.1:1443 с этим secret в Telegram\n'
-                  '5. Telegram будет идти через DPI-обход',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[500], height: 1.5),
-                ),
-              ],
-            ),
-          ),
+          _buildMtProtoTab(theme),
+          _buildSocks5Tab(theme),
+          _buildDpiTab(theme),
         ],
+      ),
+    );
+  }
+
+  // ======================== MTProto Tab ========================
+
+  Widget _buildMtProtoTab(ThemeData theme) {
+    final running = _mt.isRunning;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Status card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(
+                    running ? Icons.shield : Icons.shield_outlined,
+                    size: 64,
+                    color: running ? Colors.green : Colors.grey,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    running ? 'MTProto активен' : 'MTProto остановлен',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '127.0.0.1:1443',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  Switch(
+                    value: running,
+                    onChanged: (v) async {
+                      if (v) {
+                        await _mt.start();
+                      } else {
+                        await _mt.stop();
+                      }
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                  if (running) ...[
+                    const SizedBox(height: 8),
+                    // Proxy link
+                    SelectableText(
+                      _mt.getProxyLink(),
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Нажми и скопируй, вставь в Telegram',
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Stats row
+          if (running) ...[
+            Row(
+              children: [
+                _statCard(theme, 'Статус', _mt.status, Icons.circle, _mt.status == 'running' ? Colors.green : Colors.orange),
+                const SizedBox(width: 8),
+                _statCard(theme, 'Подключений', '${_mt.connections}', Icons.link, Colors.blue),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _statCard(theme, 'Релеи (вверх/вниз)', _fmtBytes(_mt.bytesRelayed), Icons.swap_vert, Colors.purple),
+                const SizedBox(width: 8),
+                _statCard(theme, 'DC', _mt.currentDc, Icons.dns, Colors.teal),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _statCard(theme, 'Рукопожатий OK', '${_mt.handshakeOk}', Icons.check_circle, Colors.green),
+                const SizedBox(width: 8),
+                _statCard(theme, 'Ошибок', '${_mt.handshakeFail}', Icons.error, Colors.red),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _statCardWide(theme, 'Протокол', _mt.protocol, Icons.lock, Colors.amber),
+            const SizedBox(height: 16),
+            // Secret display
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Secret', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      _mt.secret,
+                      style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '0xDD = Fake TLS режим. Используй этот secret в настройках прокси Telegram.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ======================== SOCKS5 Tab ========================
+
+  Widget _buildSocks5Tab(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(
+                    _socks.isRunning ? Icons.vpn_lock : Icons.vpn_lock_outlined,
+                    size: 64,
+                    color: _socks.isRunning ? Colors.green : Colors.grey,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _socks.isRunning ? 'SOCKS5 активен' : 'SOCKS5 остановлен',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '127.0.0.1:${_socks.port}',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  Switch(
+                    value: _socks.isRunning,
+                    onChanged: (v) async {
+                      if (v) {
+                        await _socks.start();
+                      } else {
+                        await _socks.stop();
+                      }
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_socks.isRunning) ...[
+            Row(
+              children: [
+                _statCard(theme, 'Соединений', '${_socks.connections}', Icons.link, Colors.blue),
+                const SizedBox(width: 8),
+                _statCard(theme, 'Передано', _fmtBytes(_socks.bytesTransferred), Icons.swap_vert, Colors.purple),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('SOCKS5 proxy config', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      'socks5://127.0.0.1:${_socks.port}',
+                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Укажи в настройках Telegram: Настройки → Данные → Использование прокси → SOCKS5',
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ======================== DPI Tab ========================
+
+  Widget _buildDpiTab(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.dns,
+                    size: 64,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'DPI обход',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Активен через VpnService — все пакеты обрабатываются',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '• TLS-пакеты: рандомная фрагментация, паддинг\n'
+                    '• HTTP: сплит заголовков, случайные пробелы\n'
+                    '• Multi-split для больших пакетов\n'
+                    '• Автоматический выбор стратегии (5 методов)',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Стратегии DPI обхода', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          _strategyItem('TLS паддинг', 'Добавляет случайные TLS-записи в конце'),
+          _strategyItem('TLS фрагментация', 'Разбивает ClientHello на части'),
+          _strategyItem('SNI паддинг', 'Добавляет мусорные расширения в SNI'),
+          _strategyItem('HTTP сплит', 'Разделяет строку метод-путь символом \\n'),
+          _strategyItem('Multi-split', 'Случайно мультиплексирует пакеты'),
+        ],
+      ),
+    );
+  }
+
+  Widget _strategyItem(String name, String desc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Card(
+        child: ListTile(
+          leading: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+          title: Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
+        ),
+      ),
+    );
+  }
+
+  // ======================== Helpers ========================
+
+  Widget _statCard(ThemeData theme, String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(height: 4),
+              Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statCardWide(ThemeData theme, String label, String value, IconData icon, Color color) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+                Text(label, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

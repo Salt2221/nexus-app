@@ -1,64 +1,55 @@
+// ═══════════════════════════════════════════════════════════════
+// NEXUS MainActivity — точка входа для Flutter
+//
+//  MethodChannel: com.nexus.v2/vpn
+//    - start / stop / status
+// ═══════════════════════════════════════════════════════════════
+
 package com.nexus.v2
 
 import android.app.Activity
 import android.content.Intent
-import android.net.VpnService
+import android.os.Build
+import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.*
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.nexus.v2/vpn"
-    private val VPN_REQUEST_CODE = 9001
-    private var pendingResult: MethodChannel.Result? = null
+    companion object {
+        private const val CHANNEL = "com.nexus.v2/vpn"
+        private const val VPN_REQUEST_CODE = 100
+    }
+
+    private var methodChannel: MethodChannel? = null
+    private var statusTimer: Timer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
-                "startVpn" -> {
-                    val intent = VpnService.prepare(this)
-                    if (intent != null) {
-                        pendingResult = result
-                        startActivityForResult(intent, VPN_REQUEST_CODE)
+                "start" -> {
+                    val preIntent = android.net.VpnService.prepare(this@MainActivity)
+                    if (preIntent != null) {
+                        startActivityForResult(preIntent, VPN_REQUEST_CODE)
                     } else {
-                        val svcIntent = Intent(this, NexusVpnService::class.java)
-                        startForegroundService(svcIntent)
-                        result.success(true)
+                        startVpnService()
                     }
+                    result.success("starting")
                 }
-                "stopVpn" -> {
-                    val intent = Intent(this, NexusVpnService::class.java).apply { action = "STOP" }
-                    startService(intent)
-                    result.success(true)
+                "stop" -> {
+                    stopVpnService()
+                    result.success("stopped")
                 }
-                "startMtproxy" -> {
-                    val port = call.argument<Int>("port") ?: 1443
-                    val intent = Intent(this, NexusVpnService::class.java).apply {
-                        action = "MT_START"
-                        putExtra("port", port)
-                    }
-                    startService(intent)
-                    // Return static secret
-                    result.success(NexusVpnService.mtproxySecret)
-                }
-                "stopMtproxy" -> {
-                    val intent = Intent(this, NexusVpnService::class.java).apply { action = "MT_STOP" }
-                    startService(intent)
-                    result.success(true)
-                }
-                "getMtproxyStatus" -> {
-                    val map = mapOf(
-                        "secret" to NexusVpnService.mtproxySecret,
-                        "port" to 1443,
-                        "running" to (NexusVpnService.mtproxySecret.isNotEmpty())
-                    )
-                    result.success(map)
-                }
-                "getVpnStatus" -> {
-                    val map = mapOf("running" to true) // simplified
-                    result.success(map)
+                "status" -> {
+                    result.success(mapOf(
+                        "running" to NexusVpnService.isRunning(),
+                        "bytesUp" to 0,
+                        "bytesDown" to 0,
+                    ))
                 }
                 else -> result.notImplemented()
             }
@@ -66,17 +57,28 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VPN_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK) {
-                val intent = Intent(this, NexusVpnService::class.java)
-                startForegroundService(intent)
-                pendingResult?.success(true)
+                startVpnService()
+                methodChannel?.invokeMethod("onStatus", mapOf("status" to "connected"))
             } else {
-                pendingResult?.success(false)
+                methodChannel?.invokeMethod("onStatus", mapOf("status" to "rejected"))
             }
-            pendingResult = null
-            return
         }
-        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private fun startVpnService() {
+        val intent = Intent(this, NexusVpnService::class.java).apply { action = NexusVpnService.ACTION_START }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopVpnService() {
+        val intent = Intent(this, NexusVpnService::class.java).apply { action = NexusVpnService.ACTION_STOP }
+        startService(intent)
     }
 }

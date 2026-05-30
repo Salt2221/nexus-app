@@ -2,24 +2,18 @@ import 'package:flutter/material.dart';
 import 'services/nexus_zapret.dart';
 import 'services/customization_service.dart';
 import 'services/update_checker.dart' show UpdateChecker, UpdateInfo;
-import 'services/mtproto_proxy.dart';
 import 'services/mesh_network.dart';
+import 'app_shell.dart';
 import 'services/auth_service.dart';
 import 'auth/login_screen.dart';
-import 'home/home_screen.dart';
-import 'chat/deepseek_screen.dart';
-import 'vpn/vpn_screen.dart';
-import 'settings/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load all services BEFORE runApp
   await CustomizationService.instance.loadFromPrefs();
   await NexusAuthService.instance.initialize();
 
   NexusZapret.instance.init();
-  NexusMtprotoProxy.instance.init();
   MeshNetworkManager.instance.init();
 
   runApp(const NexusApp());
@@ -33,40 +27,26 @@ class NexusApp extends StatefulWidget {
 }
 
 class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
-  int _currentIndex = 0;
-
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    DeepSeekChatScreen(),
-    VpnScreen(),
-    SettingsScreen(),
-  ];
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    NexusAuthService.instance.addListener(_onAuthChanged);
-    CustomizationService.instance.addListener(_onCustomChanged);
+    NexusAuthService.instance.addListener(_onChanged);
+    CustomizationService.instance.addListener(_onChanged);
 
-    // Auto-check update
     _checkUpdateOnce();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    NexusAuthService.instance.removeListener(_onAuthChanged);
-    CustomizationService.instance.removeListener(_onCustomChanged);
+    NexusAuthService.instance.removeListener(_onChanged);
+    CustomizationService.instance.removeListener(_onChanged);
     super.dispose();
   }
 
-  void _onAuthChanged() {
-    if (mounted) setState(() {});
-  }
-
-  void _onCustomChanged() {
+  void _onChanged() {
     if (mounted) setState(() {});
   }
 
@@ -84,13 +64,13 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Доступно обновление'),
-        content: Text('Версия ${update.versionName} (${update.versionCode})\n\n${update.changelog}'),
+        content: Text('Версия ${update.versionName}\n\n${update.changelog}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Позже')),
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              UpdateChecker.instance.applyUpdate();
+              UpdateChecker.instance.checkForUpdate();
             },
             child: const Text('Обновить'),
           ),
@@ -117,47 +97,8 @@ class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: theme,
       home: NexusAuthService.instance.isSignedIn
-          ? _buildMainScaffold(primary)
+          ? const AppShell()
           : const LoginScreen(),
-    );
-  }
-
-  Widget _buildMainScaffold(Color primary) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF161B22)
-            : Colors.white,
-        indicatorColor: primary.withValues(alpha: 0.2),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Главная',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
-            label: 'AI',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.shield_outlined),
-            selectedIcon: Icon(Icons.shield),
-            label: 'VPN',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Профиль',
-          ),
-        ],
-      ),
     );
   }
 }

@@ -34,6 +34,13 @@ android {
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -46,8 +53,11 @@ android {
         applicationId = "com.nexus.v2"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.4"
+        versionCode = 8
+        versionName = "1.0.8"
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
         multiDexEnabled = true
         ndk {
             abiFilters += listOf("arm64-v8a")

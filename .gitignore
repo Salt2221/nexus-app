@@ -27,3 +27,11 @@ android/app/.cxx/
 android/build/
 android/local.properties
 .dart_tool/
+
+
+# Big binary files (removed from repo, kept locally)
+android/app/src/main/cpp/*.bin
+android/app/src/main/cpp/*data_bin*.c
+android/app/src/main/cpp/nexus_sdr/*.bin
+android/app/src/main/cpp/nexus_edge/*.bin
+android/app/src/main/cpp/nexus_compute/*.bin

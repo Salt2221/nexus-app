@@ -1,0 +1,57 @@
+﻿===========================================
+  NEXUS Stress Test я┐╜ я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+===========================================
+  я┐╜я┐╜я┐╜я┐╜я┐╜: 2026-05-29T16:11:45.466Z
+  Node: v24.13.0
+===========================================
+
+
+?? Edge Storage:
+  ? SHA256 content hashing
+  ? AES-256-CTR encrypt/decrypt
+  ? AES-256-GCM (zero-knowledge layer)
+  ? HMAC-SHA256 verification
+  ? Key derivation (PBKDF2)
+  ? я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ = я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜
+  ? я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ = я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜
+  ? я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜ (10MB)
+
+?? Volunteer Computing:
+  ? Matrix multiplication 100x100
+  ? Matrix multiplication 300x300 (я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜)
+  ? я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜ 100000 (я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜)
+  ? SHA-256 hash brute (1000 attempts)
+  ? Pi calculation (Leibniz, 1M iterations)
+
+?? SDR:
+  ? FFT 1024 я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+  ? FM я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+  ? FIR я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ (low-pass)
+  ? ADS-B like frame decoding: ICAO: abcd
+  ? Signal detection threshold
+
+??? VPN/MTProto:
+  ? Obfuscated handshake generation
+  ? Fake TLS ClientHello generation (0xDD secret)
+  ? HMAC verification for fake TLS
+  ? AES-CTR encryption for obfuscation
+
+?? DPI Bypass:
+  ? TLS fragmentatation (split ClientHello)
+  ? HTTP/1.1 Upgrade??
+  ? DNS over HTTPS я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+  ? Random padding (1-100 bytes)
+
+?? я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜:
+  ? Socks5 handshake
+
+?? я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜:
+  ? UDP datagram send/receive
+  ? TCP connection roundtrip
+
+===========================================
+  я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜: ? 28 passed | ? 1 failed
+  я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜: 29
+===========================================
+
+  ? я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜!

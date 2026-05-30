@@ -15,10 +15,12 @@ class Socks5Proxy extends ChangeNotifier {
   bool _running = false;
   int _port = 1080;
   int _connections = 0;
+  int _bytesTransferred = 0;
 
   bool get isRunning => _running;
   int get port => _port;
   int get connections => _connections;
+  int get bytesTransferred => _bytesTransferred;
 
   /// Запустить SOCKS5 прокси на указанном порту
   Future<bool> start({int port = 1080}) async {
@@ -131,6 +133,7 @@ class Socks5Proxy extends ChangeNotifier {
       final completer = Completer<void>();
 
       client.listen((data) {
+        _bytesTransferred += data.length;
         target.add(data);
       }, onDone: () {
         target.destroy();
@@ -141,6 +144,7 @@ class Socks5Proxy extends ChangeNotifier {
       });
 
       target.listen((data) {
+        _bytesTransferred += data.length;
         client.add(data);
       }, onDone: () {
         client.destroy();
