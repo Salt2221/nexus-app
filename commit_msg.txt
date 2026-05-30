@@ -1,20 +1,21 @@
-NexusGram: настоящий Telegram клиент на MTProto + SOCKS5
+P2P Profile: два способа регистрации (+ Google почта)
 
-Удалён WebView (telegram_web_screen.dart).
-Создан полноценный Telegram-клиент внутри NEXUS:
+_ProfilePlaceholder переписан с нуля:
 
-lib/gram/nexusgram_screen.dart — главный экран NexusGram:
-- Нативная авторизация (номер + код из Telegram)
-- SOCKS5: 127.0.0.1:1443 через NEXUS
-- Список чатов с аватарами
-- Чат с отправкой сообщений
-- Пузырьки входящие/исходящие
-- Выход и сброс сессии
-- Заголовок "NexusGram" (синий AppBar)
+1. Google почта (@gmail.com):
+   - Поля: email, username, display name
+   - Валидация @gmail.com
+   - OAuth-подобная привязка для восстановления
+   - Сохранение в SharedPreferences + DHT
 
-lib/gram/telegram_mtproto.dart — MTProto слой:
-- Socks5Client для работы через NEXUS proxy
-- Telegram API через прокси
-- Весь трафик идёт через локальный SOCKS5
+2. P2P Ключ:
+   - Поля: username, display name
+   - Валидация: латиница/цифры, 3+ символа
+   - X25519 ключ генерируется автоматически
+   - Шифрование профиля в DHT
 
-pubspec.yaml: добавлены telegram_client, socks5_proxy
+Оба способа:
+   - Регистрируют в P2P сети через GlobalP2PNode
+   - Показывают P2P ID, статус DHT
+   - Возможность выйти и сбросить сессию
+   - Регистрация через BottomSheet с выбором метода

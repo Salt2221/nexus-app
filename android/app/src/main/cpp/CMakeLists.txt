@@ -5,6 +5,14 @@ cmake_minimum_required(VERSION 3.18)
 
 project("nexus_native")
 
+# ─── TDLib Native — MTProto Native через libtdjson ────────
+# libtdjson.so поставляется через jniLibs из Maven org.drinkless.tdlib
+add_library(nexus_td SHARED
+    dpi_engine/tdl_native.cpp
+)
+target_link_libraries(nexus_td PRIVATE log tdjson)
+target_include_directories(nexus_td PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../tdlib/include)
+
 # ─── DPI Engine ─────────────────────────────────────────────
 add_library(nexus_dpi SHARED
     dpi_engine/packet_fragmenter.cpp

@@ -176,6 +176,35 @@ class DpiNative {
     external fun nativeTunnelSwitchDomain(domain: String)
     external fun nativeTunnelSwitchProtocol(protocol: String)
 
+    // ═══════════════════════════════════════════════════════════
+    // 4. TDLib — MTProto Native
+    // ═══════════════════════════════════════════════════════════
+
+    external fun nativeTdInit(
+        apiId: Int,
+        apiHash: String,
+        proxyHost: String,
+        proxyPort: Int
+    ): Boolean
+
+    external fun nativeTdSendPhone(phone: String)
+    external fun nativeTdSendCode(code: String)
+    external fun nativeTdSendMessage(chatId: Long, text: String)
+    external fun nativeTdDestroy()
+
+    private var _tdInit = false
+
+    fun tdInit(proxyHost: String = "127.0.0.1", proxyPort: Int = 1443): Boolean {
+        if (!_tdInit) {
+            val ok = nativeTdInit(2040, "b18441a1ff607e10a989891a5462e627", proxyHost, proxyPort)
+            _tdInit = ok
+            Log.i(TAG, "TDLib init: $ok (proxy: ${proxyHost}:${proxyPort})")
+        }
+        return _tdInit
+    }
+
+    // ═══════════════════════════════════════════════════════════
+
     fun tunnelConnect(config: TunnelConfig): Boolean {
         val json = buildString {
             append("""{"front_domain":"${config.frontDomain}",""")

@@ -22,8 +22,7 @@ dependencies:
   dio: ^5.9.2
   crypto: ^3.0.7
   qr_flutter: ^4.1.0
-  telegram_client: ^1.0.0
-  socks5_proxy: ^1.0.2
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
