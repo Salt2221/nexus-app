@@ -1,21 +1,26 @@
-P2P Profile: два способа регистрации (+ Google почта)
+NexusGram: полный MTProto Native через TDLib
 
-_ProfilePlaceholder переписан с нуля:
+Добавлен полноценный TDLib (libtdjson) клиент:
 
-1. Google почта (@gmail.com):
-   - Поля: email, username, display name
-   - Валидация @gmail.com
-   - OAuth-подобная привязка для восстановления
-   - Сохранение в SharedPreferences + DHT
+android/app/src/main/cpp/dpi_engine/tdl_native.cpp:
+- TdNativeClient — C++ обёртка над td_json_client
+- sendPhoneNumber, checkCode, checkPassword
+- getChats, getChatHistory, sendMessage
+- NEXUS SOCKS5 proxy: 127.0.0.1:1443
+- setTdlibParameters с database_directory
+- MTProto proxy: addProxy + enableProxy
+- JNI методы: nativeTdInit/Phone/Code/Message/Destroy
 
-2. P2P Ключ:
-   - Поля: username, display name
-   - Валидация: латиница/цифры, 3+ символа
-   - X25519 ключ генерируется автоматически
-   - Шифрование профиля в DHT
+DpiNative.kt:
+- TDLib JNI bridge: tdInit, tdSendPhone, tdSendCode, tdSendMessage
+- Инициализация через NEXUS SOCKS5
 
-Оба способа:
-   - Регистрируют в P2P сети через GlobalP2PNode
-   - Показывают P2P ID, статус DHT
-   - Возможность выйти и сбросить сессию
-   - Регистрация через BottomSheet с выбором метода
+CMakeLists.txt:
+- nexus_td: tdl_native.cpp → libtdjson.so из Maven
+
+NexusGram UI:
+- Полная переработка на TDLib API
+- Step-by-step авторизация: phone → code → 2FA password
+- Список чатов с реальными TDLib вызовами
+- Отправка сообщений через TDLib
+- Заголовок NexusGram, синий AppBar

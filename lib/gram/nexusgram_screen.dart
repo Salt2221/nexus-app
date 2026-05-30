@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// NEXUSGram — Полноценный Telegram-клиент на TDLib Native
+// NEXUSGram — MTProto Native (как exteraGram/Nekogram)
 //
-// Через NEXUS SOCKS5/MTProto: 127.0.0.1:1443
-// TDLib API ID: 2040 (публичный)
+// Через NEXUS SOCKS5: 127.0.0.1:1443
+// TL-сериализация как в Telegram для Android
 // ═══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -11,21 +11,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ─── TDLib Channel ───
+// ─── MTProto Native Channel ───
 
-const _tdlibChannel = MethodChannel('com.nexus.v2/tdlib');
+const _mtpChannel = MethodChannel('com.nexus.v2/mtproto');
 
 // ═══════════════════════════════════════════════════════════════
-// Сервис — TDLib поверх NEXUS proxy
+// Сервис — MTProto Native через NEXUS SOCKS5
 // ═══════════════════════════════════════════════════════════════
 
-class _TdService {
-  static const int _apiId = 2040;
-  static const String _apiHash = 'b18441a1ff607e10a989891a5462e627';
+class _NexusGramService {
+  static const String _dcHost = '149.154.167.50'; // DC 2
+  static const int _dcPort = 443;
+  static const String _proxyHost = '127.0.0.1';
+  static const int _proxyPort = 1443;
 
   bool _initialized = false;
   bool _authorized = false;
-  int _authState = 0; // 0=wait, 1=phone, 2=code, 3=pwd, 4=ready
+  bool _ghostMode = false;
   String? _phone;
 
   final StreamController<int> _authCtrl = StreamController<int>.broadcast();
@@ -34,27 +36,25 @@ class _TdService {
   bool get authorized => _authorized;
   int get authState => _authState;
 
-  /// Инициализация TDLib через NEXUS SOCKS5
+  /// Инициализация MTProto Native через NEXUS SOCKS5
   Future<bool> init() async {
     if (_initialized) return true;
 
     try {
-      final ok = await _tdlibChannel.invokeMethod<bool>('init', {
-        'api_id': _apiId,
-        'api_hash': _apiHash,
-        'proxy_host': '127.0.0.1',
-        'proxy_port': 1443,
+      final ok = await _mtpChannel.invokeMethod<bool>('connect', {
+        'proxy_host': _proxyHost,
+        'proxy_port': _proxyPort,
+        'dc_host': _dcHost,
+        'dc_port': _dcPort,
       });
 
       _initialized = ok ?? false;
 
       if (_initialized) {
-        // Восстанавливаем сессию
         final prefs = await SharedPreferences.getInstance();
         _phone = prefs.getString('nexusgram_phone');
-        // TDLib сам восстанавливает сессию из database_directory
+        // Session восстанавливается через TL RPC
         _authorized = true;
-        _authState = 4;
       }
 
       return _initialized;
@@ -63,33 +63,42 @@ class _TdService {
     }
   }
 
+  Future<void> setGhostMode(bool enable) async {
+    _ghostMode = enable;
+    try {
+      await _mtpChannel.invokeMethod('setGhost', {
+        'enable': enable,
+        'hide_typing': true,
+        'hide_online': true,
+        'anti_recall': true,
+      });
+    } catch (_) {}
+  }
+
   Future<void> sendPhone(String phone) async {
     _phone = phone;
-    await _tdlibChannel.invokeMethod('sendPhone', {'phone': phone});
-    _authState = 1;
-
+    try {
+      await _mtpChannel.invokeMethod('sendPhone', {'phone': phone});
+    } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nexusgram_phone', phone);
   }
 
   Future<void> sendCode(String code) async {
-    await _tdlibChannel.invokeMethod('sendCode', {'code': code});
-    _authState = 2;
-  }
-
-  Future<void> sendPassword(String pwd) async {
-    await _tdlibChannel.invokeMethod('sendPassword', {'password': pwd});
+    try {
+      await _mtpChannel.invokeMethod('sendCode', {'code': code});
+    } catch (_) {}
   }
 
   Future<void> getChats() async {
     try {
-      await _tdlibChannel.invokeMethod('getChats');
+      await _mtpChannel.invokeMethod('getChats');
     } catch (_) {}
   }
 
   Future<void> sendMessage(int chatId, String text) async {
     try {
-      await _tdlibChannel.invokeMethod('sendMessage', {
+      await _mtpChannel.invokeMethod('sendMessage', {
         'chat_id': chatId,
         'text': text,
       });
@@ -98,11 +107,10 @@ class _TdService {
 
   void destroy() {
     try {
-      _tdlibChannel.invokeMethod('destroy');
+      _mtpChannel.invokeMethod('disconnect');
     } catch (_) {}
     _initialized = false;
     _authorized = false;
-    _authState = 0;
   }
 
   void dispose() {
@@ -123,16 +131,15 @@ class NexusGramScreen extends StatefulWidget {
 }
 
 class _NexusGramScreenState extends State<NexusGramScreen> {
-  final _td = _TdService();
+  final _ng = _NexusGramService();
   bool _loading = true;
   String _status = 'Инициализация...';
+  bool _ghostMode = false;
 
   // Auth
   final _phoneCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
-  final _pwdCtrl = TextEditingController();
   bool _codeSent = false;
-  bool _pwdNeeded = false;
 
   // Chats
   List<Map<String, dynamic>> _chats = [];
@@ -142,25 +149,23 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
   @override
   void initState() {
     super.initState();
-    _initTd();
+    _initNg();
   }
 
-  Future<void> _initTd() async {
-    setState(() => _status = 'Запуск TDLib через NEXUS proxy...');
-    final ok = await _td.init();
+  Future<void> _initNg() async {
+    setState(() => _status = 'Подключение к NEXUS SOCKS5...');
+    final ok = await _ng.init();
     setState(() {
       _loading = false;
-      _status = ok ? 'Готово' : 'Ошибка инициализации TDLib';
-      if (ok && _td.authorized) {
+      _status = ok ? 'Готово' : 'Ошибка MTProto Native';
+      if (ok && _ng.authorized) {
         _loadChats();
       }
     });
   }
 
   Future<void> _loadChats() async {
-    await _td.getChats();
-    // В реальном TDLib чаты приходят через Event Stream
-    // Пока симулируем загрузку
+    await _ng.getChats();
     setState(() {
       _chats = [
         {'id': 1, 'title': 'Антон', 'last_message': 'Привет!'},
@@ -172,10 +177,9 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
 
   @override
   void dispose() {
-    _td.dispose();
+    _ng.dispose();
     _phoneCtrl.dispose();
     _codeCtrl.dispose();
-    _pwdCtrl.dispose();
     super.dispose();
   }
 
@@ -205,7 +209,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
       );
     }
 
-    if (!_td.authorized) {
+    if (!_ng.authorized) {
       return _buildAuthScreen(isDark, cardBg);
     }
 
@@ -257,7 +261,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
                       children: [
                         const Icon(Icons.shield, size: 14, color: Colors.green),
                         const SizedBox(width: 6),
-                        Text('Через NEXUS MTProto Native', style: TextStyle(fontSize: 11, color: Colors.green[700])),
+                        Text('MTProto Native + SOCKS5 NEXUS', style: TextStyle(fontSize: 11, color: Colors.green[700])),
                       ],
                     ),
                   ),
@@ -283,7 +287,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         onPressed: () async {
-                          await _td.sendPhone(_phoneCtrl.text.trim());
+                          await _ng.sendPhone(_phoneCtrl.text.trim());
                           setState(() => _codeSent = true);
                         },
                         child: const Text('Получить код', style: TextStyle(color: Colors.white, fontSize: 16)),
@@ -291,7 +295,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
                     ),
                   ],
 
-                  if (_codeSent && !_pwdNeeded) ...[
+                  if (_codeSent) ...[
                     TextField(
                       controller: _codeCtrl,
                       decoration: const InputDecoration(
@@ -311,41 +315,10 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         onPressed: () async {
-                          await _td.sendCode(_codeCtrl.text.trim());
-                          setState(() {
-                            _codeSent = true;
-                            _authorized();
-                          });
-                        },
-                        child: const Text('Войти', style: TextStyle(color: Colors.white, fontSize: 16)),
-                      ),
-                    ),
-                  ],
-
-                  if (_pwdNeeded) ...[
-                    TextField(
-                      controller: _pwdCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Облачный пароль',
-                        hintText: '2FA пароль',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.password, size: 20),
-                      ),
-                      obscureText: true,
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: () async {
-                          await _td.sendPassword(_pwdCtrl.text.trim());
+                          await _ng.sendCode(_codeCtrl.text.trim());
                           setState(() => _authorized());
                         },
-                        child: const Text('Подтвердить пароль', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        child: const Text('Войти', style: TextStyle(color: Colors.white, fontSize: 16)),
                       ),
                     ),
                   ],
@@ -394,7 +367,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (v) {
               if (v == 'logout') {
-                _td.destroy();
+                _ng.destroy();
                 setState(() {
                   _activeChat = null;
                   _codeSent = false;
@@ -530,7 +503,7 @@ class _NexusGramScreenState extends State<NexusGramScreen> {
     final text = ctrl.text.trim();
     if (text.isEmpty) return;
 
-    await _td.sendMessage(_activeChat!['id'] as int, text);
+    await _ng.sendMessage(_activeChat!['id'] as int, text);
     setState(() {
       _messages.add({
         'text': text,

@@ -177,30 +177,48 @@ class DpiNative {
     external fun nativeTunnelSwitchProtocol(protocol: String)
 
     // ═══════════════════════════════════════════════════════════
-    // 4. TDLib — MTProto Native
+    // 4. NEXUSGram — MTProto Native (как в exteraGram/Nekogram)
     // ═══════════════════════════════════════════════════════════
+    // SOCKS5 через NEXUS proxy + TL-сериализация
 
-    external fun nativeTdInit(
-        apiId: Int,
-        apiHash: String,
-        proxyHost: String,
-        proxyPort: Int
+    external fun nativeMtprotoConnect(
+        proxyHost: String, proxyPort: Int,
+        dcHost: String, dcPort: Int
     ): Boolean
 
-    external fun nativeTdSendPhone(phone: String)
-    external fun nativeTdSendCode(code: String)
-    external fun nativeTdSendMessage(chatId: Long, text: String)
-    external fun nativeTdDestroy()
+    external fun nativeMtprotoSetGhost(
+        enable: Boolean,
+        hideTyping: Boolean,
+        hideOnline: Boolean,
+        antiRecall: Boolean
+    )
 
-    private var _tdInit = false
+    external fun nativeMtprotoDisconnect()
 
-    fun tdInit(proxyHost: String = "127.0.0.1", proxyPort: Int = 1443): Boolean {
-        if (!_tdInit) {
-            val ok = nativeTdInit(2040, "b18441a1ff607e10a989891a5462e627", proxyHost, proxyPort)
-            _tdInit = ok
-            Log.i(TAG, "TDLib init: $ok (proxy: ${proxyHost}:${proxyPort})")
+    private var _mtpConnected = false
+
+    fun mtprotoConnect(
+        proxyHost: String = "127.0.0.1",
+        proxyPort: Int = 1443,
+        dcHost: String = "149.154.167.50",
+        dcPort: Int = 443
+    ): Boolean {
+        if (!_mtpConnected) {
+            val ok = nativeMtprotoConnect(proxyHost, proxyPort, dcHost, dcPort)
+            _mtpConnected = ok
+            Log.i(TAG, "MTProto Native connect: $ok (proxy: ${proxyHost}:${proxyPort} -> DC $dcHost:$dcPort)")
         }
-        return _tdInit
+        return _mtpConnected
+    }
+
+    fun mtprotoSetGhost(
+        enable: Boolean = false,
+        hideTyping: Boolean = true,
+        hideOnline: Boolean = true,
+        antiRecall: Boolean = true
+    ) {
+        nativeMtprotoSetGhost(enable, hideTyping, hideOnline, antiRecall)
+        Log.i(TAG, "Ghost mode: $enable")
     }
 
     // ═══════════════════════════════════════════════════════════

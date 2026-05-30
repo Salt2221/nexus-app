@@ -11,11 +11,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("com.getkeepsafe.relinker:relinker:1.4.5")
-
-    // TDLib — MTProto Native (сборка через NDK)
-    implementation("org.drinkless.tdlib:tdlib:1.8.45") {
-        exclude(group = "com.google.android.gms")
-    }
 }
 
 // Exclude ABI jars - libflutter.so is provided via jniLibs directly
